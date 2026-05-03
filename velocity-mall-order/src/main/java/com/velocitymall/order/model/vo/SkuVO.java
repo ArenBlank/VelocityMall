@@ -1,4 +1,4 @@
-package com.velocitymall.product.model.vo;
+package com.velocitymall.order.model.vo;
 
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * SKU 视图对象。
+ * 订单服务侧 SKU 快照视图对象。
  */
 @Data
 @Builder

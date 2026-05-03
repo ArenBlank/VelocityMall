@@ -14,9 +14,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SubmitOrderDTO {
 
-    @NotNull(message = "用户ID不能为空")
-    private Long userId;
-
     @NotNull(message = "SKU ID不能为空")
     private Long skuId;
 

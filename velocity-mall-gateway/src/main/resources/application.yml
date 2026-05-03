@@ -11,7 +11,19 @@ spring:
       discovery:
         server-addr: 127.0.0.1:8848
     gateway:
+      routes:
+        - id: product-route
+          uri: lb://velocity-mall-product
+          predicates:
+            - Path=/api/v1/products/**
+        - id: order-route
+          uri: lb://velocity-mall-order
+          predicates:
+            - Path=/api/v1/orders/**
       discovery:
         locator:
-          enabled: true
+          enabled: false
           lower-case-service-id: true
+
+jwt:
+  secret: 7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D

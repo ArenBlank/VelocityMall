@@ -28,4 +28,21 @@ public interface SkuMapper extends BaseMapper<Sku> {
               AND is_deleted = 0
             """)
     int lockStock(@Param("skuId") Long skuId, @Param("quantity") Integer quantity);
+
+    /**
+     * 条件释放锁定库存，避免锁定库存被扣成负数。
+     *
+     * @param skuId SKU ID
+     * @param quantity 释放数量
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE pms_sku
+            SET lock_stock = lock_stock - #{quantity},
+                version = version + 1
+            WHERE id = #{skuId}
+              AND lock_stock >= #{quantity}
+              AND is_deleted = 0
+            """)
+    int unlockStock(@Param("skuId") Long skuId, @Param("quantity") Integer quantity);
 }

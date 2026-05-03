@@ -2,6 +2,8 @@ package com.velocitymall.product.controller;
 
 import com.velocitymall.common.result.Result;
 import com.velocitymall.product.model.dto.LockStockDTO;
+import com.velocitymall.product.model.dto.UnlockStockDTO;
+import com.velocitymall.product.model.vo.SkuVO;
 import com.velocitymall.product.model.vo.SpuDetailVO;
 import com.velocitymall.product.service.SkuService;
 import com.velocitymall.product.service.SpuService;
@@ -45,6 +47,20 @@ public class ProductController {
     }
 
     /**
+     * 查询 SKU 详情。
+     *
+     * @param skuId SKU ID
+     * @return SKU 详情
+     */
+    @GetMapping("/skus/{sku-id}")
+    public Result<SkuVO> getSkuById(
+            @PathVariable("sku-id")
+            @NotNull(message = "SKU ID不能为空")
+            @Min(value = 1, message = "SKU ID必须大于0") Long skuId) {
+        return Result.success(skuService.getSkuById(skuId));
+    }
+
+    /**
      * 锁定 SKU 库存。
      *
      * @param dto 锁定库存参数
@@ -53,6 +69,18 @@ public class ProductController {
     @PutMapping("/skus/lock-stock")
     public Result<Void> lockStock(@Valid @RequestBody LockStockDTO dto) {
         skuService.lockStock(dto);
+        return Result.success();
+    }
+
+    /**
+     * 释放 SKU 锁定库存。
+     *
+     * @param dto 释放锁定库存参数
+     * @return 处理结果
+     */
+    @PutMapping("/skus/unlock-stock")
+    public Result<Void> unlockStock(@Valid @RequestBody UnlockStockDTO dto) {
+        skuService.unlockStock(dto);
         return Result.success();
     }
 }

@@ -1,6 +1,10 @@
 -- VelocityMall 极速商城核心业务库表结构
--- 商品库建议使用：velocity_mall_product
--- 订单库建议使用：velocity_mall_order
+-- Phase 3 采用单库 velocity_mall + pms_/oms_ 表前缀逻辑隔离策略
+
+CREATE DATABASE IF NOT EXISTS `velocity_mall`
+    DEFAULT CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+USE `velocity_mall`;
 
 DROP TABLE IF EXISTS `pms_category`;
 CREATE TABLE `pms_category`
