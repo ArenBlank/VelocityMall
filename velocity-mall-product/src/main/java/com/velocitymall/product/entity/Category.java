@@ -34,4 +34,7 @@ public class Category extends BaseEntity {
 
     @TableField("level")
     private Integer level;
+
+    @TableField("status")
+    private Integer status;
 }

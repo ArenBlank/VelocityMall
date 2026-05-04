@@ -39,9 +39,19 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private static final String[] WHITE_LIST = {"/api/v1/products/spus/**", "/api/v1/products/skus/*"};
+    private static final String[] WHITE_LIST = {
+            "/api/v1/products/spus/**",
+            "/api/v1/products/skus/*",
+            "/api/v1/search/**",
+            "/api/v1/categories/tree"
+    };
 
-    private static final String[] BLACK_LIST = {"/api/v1/products/skus/lock-stock", "/api/v1/products/skus/unlock-stock"};
+    private static final String[] BLACK_LIST = {
+            "/api/v1/products/inner/**",
+            "/api/v1/search/inner/**",
+            "/api/v1/products/skus/lock-stock",
+            "/api/v1/products/skus/unlock-stock"
+    };
 
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -110,7 +120,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         if (pathMatcher.match(WHITE_LIST[0], path)) {
             return true;
         }
-        return pathMatcher.match(WHITE_LIST[1], path) && isNumericSkuPath(path);
+        if (pathMatcher.match(WHITE_LIST[1], path)) {
+            return isNumericSkuPath(path);
+        }
+        if (pathMatcher.match(WHITE_LIST[2], path)) {
+            return true;
+        }
+        return pathMatcher.match(WHITE_LIST[3], path);
     }
 
     private boolean isNumericSkuPath(String path) {

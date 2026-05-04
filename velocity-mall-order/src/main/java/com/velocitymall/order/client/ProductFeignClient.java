@@ -1,6 +1,7 @@
 package com.velocitymall.order.client;
 
 import com.velocitymall.common.result.Result;
+import com.velocitymall.common.model.dto.StockLockDTO;
 import com.velocitymall.order.model.dto.LockStockDTO;
 import com.velocitymall.order.model.dto.UnlockStockDTO;
 import com.velocitymall.order.model.vo.SkuVO;
@@ -42,4 +43,22 @@ public interface ProductFeignClient {
      */
     @PutMapping("/api/v1/products/skus/unlock-stock")
     Result<Void> unlockStock(@RequestBody UnlockStockDTO dto);
+
+    /**
+     * Batch lock physical stock through product internal API.
+     *
+     * @param dto batch lock request
+     * @return call result
+     */
+    @PutMapping("/api/v1/products/inner/skus/lock-batch")
+    Result<Void> lockPhysicalStock(@RequestBody StockLockDTO dto);
+
+    /**
+     * Batch unlock physical stock through product internal API.
+     *
+     * @param dto batch unlock request
+     * @return call result
+     */
+    @PutMapping("/api/v1/products/inner/skus/unlock-batch")
+    Result<Void> unlockPhysicalStock(@RequestBody StockLockDTO dto);
 }

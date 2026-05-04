@@ -1,9 +1,22 @@
-### VelocityMall Phase 6 - Submit Order Through Gateway
-POST http://127.0.0.1:8080/api/v1/orders
+### VelocityMall Phase 11 - Add Cart Item Through Gateway
+POST http://127.0.0.1:8080/api/v1/carts/items
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMDAwMSJ9.gO06k1moG99ujial-2CkEtGQtkE-vKf59mgOKA9RScU
 
 {
   "skuId": 2001,
   "quantity": 2
+}
+
+### VelocityMall Phase 11 - List Cart Items Through Gateway
+GET http://127.0.0.1:8080/api/v1/carts/items
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMDAwMSJ9.gO06k1moG99ujial-2CkEtGQtkE-vKf59mgOKA9RScU
+
+### VelocityMall Phase 11 - Submit Normal Order Through Gateway
+POST http://127.0.0.1:8080/api/v1/orders
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMDAwMSJ9.gO06k1moG99ujial-2CkEtGQtkE-vKf59mgOKA9RScU
+
+{
+  "skuIds": [2001]
 }

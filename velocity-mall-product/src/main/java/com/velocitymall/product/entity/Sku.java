@@ -39,6 +39,9 @@ public class Sku extends VersionedEntity {
     @TableField("lock_stock")
     private Integer lockStock;
 
+    @TableField("sale_count")
+    private Integer saleCount;
+
     @TableField("cover_img")
     private String coverImg;
 }

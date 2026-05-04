@@ -1,0 +1,74 @@
+name: velocity-mall-e2e
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: velocity-e2e-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: velocity_mall
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: velocity-e2e-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly no
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: velocity-e2e-nacos
+    environment:
+      MODE: standalone
+      TZ: Asia/Shanghai
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+
+  rmqnamesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: velocity-e2e-rmqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
+      TZ: Asia/Shanghai
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+
+  rmqbroker:
+    image: apache/rocketmq:4.9.4
+    container_name: velocity-e2e-rmqbroker
+    depends_on:
+      - rmqnamesrv
+    environment:
+      NAMESRV_ADDR: rmqnamesrv:9876
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
+      TZ: Asia/Shanghai
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    command:
+      - sh
+      - -c
+      - |
+        printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=rmqnamesrv:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+        sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.4
+    container_name: velocity-e2e-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      TZ: Asia/Shanghai
+    ports:
+      - "9201:9200"
+      - "9300:9300"

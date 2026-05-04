@@ -15,11 +15,13 @@ CREATE TABLE `pms_category`
     `sort`        INT         NOT NULL DEFAULT 0 COMMENT '排序值，越小越靠前',
     `icon`        VARCHAR(255)         DEFAULT NULL COMMENT '分类图标地址',
     `level`       TINYINT     NOT NULL DEFAULT 1 COMMENT '分类层级',
+    `status`      TINYINT     NOT NULL DEFAULT 1 COMMENT '启用状态，0-禁用，1-启用',
     `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `is_deleted`  TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
     PRIMARY KEY (`id`),
-    KEY `idx_parent_id` (`parent_id`)
+    KEY `idx_parent_id` (`parent_id`),
+    KEY `idx_status_sort` (`status`, `sort`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='商品分类表';
@@ -53,6 +55,7 @@ CREATE TABLE `pms_sku`
     `price`       DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '销售价格',
     `stock`       INT            NOT NULL DEFAULT 0 COMMENT '实际物理库存',
     `lock_stock`  INT            NOT NULL DEFAULT 0 COMMENT '锁定库存，用于下单未支付',
+    `sale_count`  INT            NOT NULL DEFAULT 0 COMMENT '销量',
     `cover_img`   VARCHAR(255)            DEFAULT NULL COMMENT 'SKU封面图',
     `version`     INT            NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `create_time` DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -74,7 +77,9 @@ CREATE TABLE `oms_order`
     `total_amount` DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '订单总金额',
     `pay_amount`   DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '应付金额',
     `pay_type`     TINYINT                 DEFAULT NULL COMMENT '支付方式，1-支付宝，2-微信，3-余额',
-    `status`       TINYINT        NOT NULL DEFAULT 0 COMMENT '订单状态，0-待付款，1-已付款，2-已发货，3-已完成，4-已关闭/超时取消',
+    `pay_time`     DATETIME                DEFAULT NULL COMMENT '支付时间',
+    `order_type`   TINYINT        NOT NULL DEFAULT 0 COMMENT '订单类型，0-普通订单，1-秒杀订单',
+    `status`       TINYINT        NOT NULL DEFAULT 0 COMMENT '订单状态，0-待付款，1-已付款，2-已发货，3-已完成，4-已关闭/超时取消，5-已退款',
     `remark`       VARCHAR(500)            DEFAULT NULL COMMENT '订单备注',
     `version`      INT            NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `create_time`  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -97,6 +102,7 @@ CREATE TABLE `oms_order_item`
     `spu_id`       BIGINT         NOT NULL COMMENT 'SPU ID',
     `sku_id`       BIGINT         NOT NULL COMMENT 'SKU ID',
     `sku_name`     VARCHAR(128)   NOT NULL COMMENT 'SKU名称快照',
+    `sku_pic`      VARCHAR(255)            DEFAULT NULL COMMENT 'SKU图片快照',
     `sku_price`    DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT 'SKU成交单价快照',
     `sku_quantity` INT            NOT NULL DEFAULT 1 COMMENT '购买数量',
     `create_time`  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -109,3 +115,39 @@ CREATE TABLE `oms_order_item`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='订单明细表';
+
+DROP TABLE IF EXISTS `pms_stock_lock_log`;
+CREATE TABLE `pms_stock_lock_log`
+(
+    `id`          BIGINT      NOT NULL COMMENT '库存锁定流水ID',
+    `order_sn`    VARCHAR(64) NOT NULL COMMENT '订单号',
+    `sku_id`      BIGINT      NOT NULL COMMENT 'SKU ID',
+    `quantity`    INT         NOT NULL DEFAULT 1 COMMENT '锁定数量',
+    `status`      TINYINT     NOT NULL DEFAULT 0 COMMENT '锁定状态，0-已锁定，1-已释放，2-已真实扣减',
+    `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_deleted`  TINYINT     NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_order_sku` (`order_sn`, `sku_id`),
+    KEY `idx_sku_id` (`sku_id`),
+    KEY `idx_status` (`status`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='商品库存锁定流水表';
+
+DROP TABLE IF EXISTS `mq_consume_log`;
+CREATE TABLE `mq_consume_log`
+(
+    `id`             BIGINT       NOT NULL COMMENT '消费记录ID',
+    `topic`          VARCHAR(128) NOT NULL COMMENT '消息主题',
+    `consumer_group` VARCHAR(128) NOT NULL COMMENT '消费者分组',
+    `order_sn`       VARCHAR(64)  NOT NULL COMMENT '订单号',
+    `create_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_deleted`     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_topic_group_order` (`topic`, `consumer_group`, `order_sn`),
+    KEY `idx_order_sn` (`order_sn`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='MQ消费幂等记录表';

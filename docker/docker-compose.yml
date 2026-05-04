@@ -34,8 +34,8 @@ services:
       - velocity-mall-network
 
   nacos:
-    image: nacos/nacos-server:v2.3.0
-    container_name: nacos-container-velocity
+    image: nacos/nacos-server:v2.2.3
+    container_name: nacos-container-huang
     restart: unless-stopped
     environment:
       MODE: standalone
@@ -68,13 +68,13 @@ services:
     container_name: nginx-container-velocity
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8088:80"
     networks:
       - velocity-mall-network
 
-  mqnamesrv:
+  rmqnamesrv:
     image: apache/rocketmq:4.9.4
-    container_name: mqnamesrv-container-velocity
+    container_name: rmqnamesrv-container-huang
     restart: unless-stopped
     environment:
       JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
@@ -85,14 +85,14 @@ services:
     networks:
       - velocity-mall-network
 
-  mqbroker:
+  rmqbroker:
     image: apache/rocketmq:4.9.4
-    container_name: mqbroker-container-velocity
+    container_name: rmqbroker-container-huang
     restart: unless-stopped
     depends_on:
-      - mqnamesrv
+      - rmqnamesrv
     environment:
-      NAMESRV_ADDR: mqnamesrv-container-velocity:9876
+      NAMESRV_ADDR: rmqnamesrv:9876
       JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
       TZ: Asia/Shanghai
     ports:
@@ -102,8 +102,39 @@ services:
       - sh
       - -c
       - |
-        printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=mqnamesrv-container-velocity:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+        printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=rmqnamesrv:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
         sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    networks:
+      - velocity-mall-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.4
+    container_name: elasticsearch-container-velocity
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      TZ: Asia/Shanghai
+    ports:
+      - "9201:9200"
+      - "9300:9300"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    networks:
+      - velocity-mall-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.4
+    container_name: kibana-container-velocity
+    restart: unless-stopped
+    depends_on:
+      - elasticsearch
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      TZ: Asia/Shanghai
+    ports:
+      - "5601:5601"
     networks:
       - velocity-mall-network
 

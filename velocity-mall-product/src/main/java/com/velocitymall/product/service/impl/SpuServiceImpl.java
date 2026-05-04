@@ -2,6 +2,7 @@ package com.velocitymall.product.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.velocitymall.common.exception.BusinessException;
+import com.velocitymall.common.model.dto.ProductSyncDTO;
 import com.velocitymall.common.result.ResultCode;
 import com.velocitymall.product.constant.ProductCacheConstant;
 import com.velocitymall.product.entity.Sku;
@@ -19,8 +20,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 商品 SPU 服务实现。
@@ -30,6 +36,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SpuServiceImpl implements SpuService {
 
+    private static final String PRODUCT_SYNC_TOPIC = "product-sync-topic";
+
+    private static final int PUBLISH_STATUS_OFF = 0;
+
+    private static final int PUBLISH_STATUS_ON = 1;
+
     private final SpuMapper spuMapper;
 
     private final SkuMapper skuMapper;
@@ -37,6 +49,8 @@ public class SpuServiceImpl implements SpuService {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private final RedissonClient redissonClient;
+
+    private final RocketMQTemplate rocketMQTemplate;
 
     @Override
     public SpuDetailVO getSpuDetail(Long spuId) {
@@ -78,6 +92,59 @@ public class SpuServiceImpl implements SpuService {
             if (locked && lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void publishSpu(Long spuId) {
+        updatePublishStatus(spuId, PUBLISH_STATUS_ON, ProductSyncDTO.ACTION_UPSERT);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void unpublishSpu(Long spuId) {
+        updatePublishStatus(spuId, PUBLISH_STATUS_OFF, ProductSyncDTO.ACTION_DELETE);
+    }
+
+    private void updatePublishStatus(Long spuId, Integer publishStatus, Integer syncAction) {
+        if (spuId == null || spuId <= 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "SPU ID非法");
+        }
+        int affectedRows = spuMapper.updatePublishStatus(spuId, publishStatus);
+        if (affectedRows == 0) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "SPU不存在或已删除");
+        }
+
+        redisTemplate.delete(ProductCacheConstant.spuDetailKey(spuId));
+        List<Long> skuIds = skuMapper.selectSkuIdsBySpuId(spuId);
+        registerSpuSearchSyncAfterCommit(skuIds, syncAction);
+    }
+
+    private void registerSpuSearchSyncAfterCommit(List<Long> skuIds, Integer syncAction) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                for (Long skuId : skuIds) {
+                    sendProductSyncMessage(skuId, syncAction);
+                }
+            }
+        });
+    }
+
+    private void sendProductSyncMessage(Long skuId, Integer action) {
+        try {
+            rocketMQTemplate.syncSendOrderly(
+                    PRODUCT_SYNC_TOPIC,
+                    MessageBuilder.withPayload(new ProductSyncDTO(skuId, action)).build(),
+                    String.valueOf(skuId)
+            );
+            log.info("Product SPU publish sync message sent. skuId: {}, action: {}", skuId, action);
+        } catch (Exception exception) {
+            log.error("Product SPU publish sync message send failed. skuId: {}, action: {}", skuId, action, exception);
         }
     }
 

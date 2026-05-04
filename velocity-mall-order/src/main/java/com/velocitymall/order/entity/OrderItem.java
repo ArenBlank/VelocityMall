@@ -36,6 +36,9 @@ public class OrderItem extends BaseEntity {
     @TableField("sku_name")
     private String skuName;
 
+    @TableField("sku_pic")
+    private String skuPic;
+
     @TableField("sku_price")
     private BigDecimal skuPrice;
 

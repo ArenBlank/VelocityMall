@@ -17,6 +17,9 @@
         <module>velocity-mall-gateway</module>
         <module>velocity-mall-product</module>
         <module>velocity-mall-order</module>
+        <module>velocity-mall-seckill</module>
+        <module>velocity-mall-search</module>
+        <module>velocity-mall-coupon</module>
     </modules>
 
     <properties>

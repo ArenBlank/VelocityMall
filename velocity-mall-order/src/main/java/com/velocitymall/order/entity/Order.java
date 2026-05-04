@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.velocitymall.common.entity.VersionedEntity;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -35,6 +36,12 @@ public class Order extends VersionedEntity {
 
     @TableField("pay_type")
     private Integer payType;
+
+    @TableField("pay_time")
+    private LocalDateTime payTime;
+
+    @TableField("order_type")
+    private Integer orderType;
 
     @TableField("status")
     private Integer status;

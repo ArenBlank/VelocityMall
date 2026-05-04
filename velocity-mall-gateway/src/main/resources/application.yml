@@ -7,6 +7,11 @@ spring:
   main:
     web-application-type: reactive
   cloud:
+    sentinel:
+      transport:
+        dashboard: 127.0.0.1:8858
+      filter:
+        enabled: true
     nacos:
       discovery:
         server-addr: 127.0.0.1:8848
@@ -16,10 +21,30 @@ spring:
           uri: lb://velocity-mall-product
           predicates:
             - Path=/api/v1/products/**
+        - id: category-route
+          uri: lb://velocity-mall-product
+          predicates:
+            - Path=/api/v1/categories/**
         - id: order-route
           uri: lb://velocity-mall-order
           predicates:
             - Path=/api/v1/orders/**
+        - id: cart-route
+          uri: lb://velocity-mall-order
+          predicates:
+            - Path=/api/v1/carts/**
+        - id: seckill-route
+          uri: lb://velocity-mall-seckill
+          predicates:
+            - Path=/api/v1/seckill/**
+        - id: search-route
+          uri: lb://velocity-mall-search
+          predicates:
+            - Path=/api/v1/search/**
+        - id: coupon-route
+          uri: lb://velocity-mall-coupon
+          predicates:
+            - Path=/api/v1/coupons/**
       discovery:
         locator:
           enabled: false

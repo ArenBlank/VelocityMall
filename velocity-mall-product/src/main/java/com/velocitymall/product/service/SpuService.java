@@ -14,4 +14,18 @@ public interface SpuService {
      * @return SPU 详情
      */
     SpuDetailVO getSpuDetail(Long spuId);
+
+    /**
+     * Publish a SPU and synchronize all related SKU documents after commit.
+     *
+     * @param spuId SPU ID
+     */
+    void publishSpu(Long spuId);
+
+    /**
+     * Unpublish a SPU and remove all related SKU documents after commit.
+     *
+     * @param spuId SPU ID
+     */
+    void unpublishSpu(Long spuId);
 }

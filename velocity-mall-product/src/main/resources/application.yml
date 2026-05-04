@@ -25,6 +25,11 @@ minio:
   secret-key: rootroot
   bucket-name: velocity-mall-product
 
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    group: product-producer-group
+
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
   configuration:

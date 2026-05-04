@@ -1,6 +1,6 @@
 package com.velocitymall.order.config;
 
-import com.velocitymall.order.interceptor.UserInterceptor;
+import com.velocitymall.common.interceptor.UserInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -18,6 +18,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(userInterceptor)
-                .addPathPatterns("/api/v1/orders", "/api/v1/orders/**");
+                .addPathPatterns("/api/v1/orders", "/api/v1/orders/**", "/api/v1/carts", "/api/v1/carts/**");
     }
 }

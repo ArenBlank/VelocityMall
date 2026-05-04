@@ -1,0 +1,22 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: velocity-mall-search
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+  elasticsearch:
+    uris: http://127.0.0.1:9201
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    group: search-producer-group
