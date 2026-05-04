@@ -27,6 +27,9 @@ services:
     container_name: velocity-e2e-nacos
     environment:
       MODE: standalone
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+      JVM_XMN: 128m
       TZ: Asia/Shanghai
     ports:
       - "8848:8848"

@@ -20,6 +20,7 @@ cleanup() {
 }
 
 dump_diagnostics() {
+  docker compose -f "${COMPOSE_FILE}" ps -a > "${LOG_DIR}/docker-compose-ps.log" 2>&1 || true
   docker compose -f "${COMPOSE_FILE}" logs > "${LOG_DIR}/docker-compose.log" 2>&1 || true
   for log_file in "${LOG_DIR}"/*.log; do
     [[ -f "${log_file}" ]] || continue
@@ -501,6 +502,8 @@ wait_for_port 127.0.0.1 8848 Nacos 180
 wait_for_port 127.0.0.1 9876 RocketMQ-NameServer 120
 wait_for_port 127.0.0.1 10911 RocketMQ-Broker 180
 wait_for_http "http://127.0.0.1:9201" Elasticsearch 240
+wait_for_port 127.0.0.1 9848 Nacos-gRPC 240
+wait_for_http "http://127.0.0.1:8848/nacos/v1/console/health/readiness" Nacos-readiness 240
 
 seed_database
 
