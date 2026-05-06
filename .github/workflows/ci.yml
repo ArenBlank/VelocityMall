@@ -175,15 +175,25 @@ jobs:
             java -Xms128m -Xmx256m -jar "$jar" > /tmp/${svc}.log 2>&1 &
             echo "Started $svc PID $!"
           done
+          # TCP port check — avoids HTTP 404 on gateway root path
           for port in 8080 8081 8083 8088; do
-            for i in $(seq 1 45); do
-              if curl -fsS -o /dev/null "http://127.0.0.1:${port}" 2>/dev/null; then
+            for i in $(seq 1 60); do
+              if (echo > /dev/tcp/127.0.0.1/${port}) >/dev/null 2>&1; then
                 echo "Port ${port} ready"; break
               fi
               sleep 2
             done
           done
-          sleep 10
+          # Wait for Nacos service registration
+          for svc in velocity-mall-gateway velocity-mall-product velocity-mall-user velocity-mall-seckill; do
+            for i in $(seq 1 30); do
+              if curl -fsS "http://127.0.0.1:8848/nacos/v1/ns/instance/list?serviceName=${svc}" 2>/dev/null | python3 -c 'import json,sys; payload=json.load(sys.stdin); hosts=payload.get("hosts") or []; sys.exit(0 if any(h.get("healthy") for h in hosts) else 1)' >/dev/null 2>&1; then
+                echo "Nacos ${svc} healthy"; break
+              fi
+              sleep 2
+            done
+          done
+          sleep 5
           echo "All services up"
 
       - name: Install k6
@@ -192,6 +202,21 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
           sudo apt-get update -qq && sudo apt-get install -y -qq k6
           k6 version
+
+      - name: Verify gateway routing
+        run: |
+          for i in $(seq 1 30); do
+            status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8080/api/v1/users/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"e2euser","password":"e2epass123"}' 2>/dev/null || true)
+            if [[ "${status}" == "200" ]]; then
+              echo "Gateway routing OK"; exit 0
+            fi
+            echo "Gateway not routing yet (status=${status}), retry $i/30..."
+            sleep 2
+          done
+          echo "Gateway routing check failed"
+          exit 1
 
       - name: Generate Test Users
         run: |
