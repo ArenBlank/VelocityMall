@@ -67,12 +67,28 @@ public interface OrderService {
     void mockPaySuccess(String orderSn, Integer payType);
 
     /**
-     * Check whether a user has paid for a SKU.
+     * Check whether a user has completed (received) an order containing the SKU.
      *
      * @param userId user ID
      * @param orderSn order number
      * @param skuId SKU ID
-     * @return true if the user has a paid order containing the SKU
+     * @return true if the user has a completed order containing the SKU
      */
     Boolean checkPurchase(Long userId, String orderSn, Long skuId);
+
+    /**
+     * Mark a paid order as delivered (internal admin simulation).
+     *
+     * @param orderSn order number
+     * @param deliveryCompany logistics company name
+     * @param deliverySn delivery tracking number
+     */
+    void deliver(String orderSn, String deliveryCompany, String deliverySn);
+
+    /**
+     * Confirm receipt of a delivered order.
+     *
+     * @param orderSn order number
+     */
+    void confirmReceipt(String orderSn);
 }

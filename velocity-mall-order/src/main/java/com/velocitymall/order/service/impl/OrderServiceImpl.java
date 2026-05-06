@@ -17,6 +17,7 @@ import com.velocitymall.common.model.vo.PageVO;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.common.result.ResultCode;
 import com.velocitymall.order.client.ProductFeignClient;
+import com.velocitymall.order.client.UserFeignClient;
 import com.velocitymall.order.entity.Order;
 import com.velocitymall.order.entity.OrderItem;
 import com.velocitymall.order.mapper.OrderItemMapper;
@@ -26,6 +27,7 @@ import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.dto.UnlockStockDTO;
 import com.velocitymall.order.model.vo.OrderVO;
 import com.velocitymall.order.model.vo.SkuVO;
+import com.velocitymall.order.model.vo.UserAddressVO;
 import com.velocitymall.order.service.CartService;
 import com.velocitymall.order.service.OrderService;
 import java.math.BigDecimal;
@@ -64,6 +66,10 @@ public class OrderServiceImpl implements OrderService {
 
     private static final int ORDER_STATUS_PAID = 1;
 
+    private static final int ORDER_STATUS_DELIVERED = 2;
+
+    private static final int ORDER_STATUS_COMPLETED = 3;
+
     private static final int ORDER_STATUS_CLOSED = 4;
 
     private static final int ORDER_STATUS_REFUNDED = 5;
@@ -94,6 +100,8 @@ public class OrderServiceImpl implements OrderService {
 
     private final ProductFeignClient productFeignClient;
 
+    private final UserFeignClient userFeignClient;
+
     private final OrderMapper orderMapper;
 
     private final OrderItemMapper orderItemMapper;
@@ -112,6 +120,8 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal totalAmount = calculateTotalAmount(checkedItems, skuSnapshotMap);
         String orderSn = generateOrderSn();
 
+        UserAddressVO addressSnapshot = fetchAddressSnapshot(dto.getAddressId(), currentUserId);
+
         lockPhysicalStockOrCompensate(orderSn, checkedItems);
         try {
             Order order = Order.builder()
@@ -121,6 +131,12 @@ public class OrderServiceImpl implements OrderService {
                     .payAmount(totalAmount)
                     .orderType(ORDER_TYPE_NORMAL)
                     .status(ORDER_STATUS_WAIT_PAY)
+                    .receiverName(addressSnapshot.getReceiverName())
+                    .receiverPhone(addressSnapshot.getReceiverPhone())
+                    .receiverProvince(addressSnapshot.getProvince())
+                    .receiverCity(addressSnapshot.getCity())
+                    .receiverRegion(addressSnapshot.getRegion())
+                    .receiverDetailAddress(addressSnapshot.getDetailAddress())
                     .build();
             orderMapper.insert(order);
 
@@ -324,7 +340,7 @@ public class OrderServiceImpl implements OrderService {
         if (userId == null || userId <= 0 || !StringUtils.hasText(orderSn) || skuId == null || skuId <= 0) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "购买校验参数非法");
         }
-        Long count = orderMapper.countPaidSkuOrders(userId, orderSn, skuId);
+        Long count = orderMapper.countCompletedSkuOrders(userId, orderSn, skuId);
         return count != null && count > 0;
     }
 
@@ -679,5 +695,51 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(ResultCode.BIZ_WARNING, message);
         }
         return skuResult.getData();
+    }
+
+    private UserAddressVO fetchAddressSnapshot(Long addressId, Long userId) {
+        Result<UserAddressVO> result = userFeignClient.getAddressById(addressId, userId);
+        if (result == null || !ResultCode.SUCCESS.getCode().equals(result.getCode()) || result.getData() == null) {
+            String message = result == null || !StringUtils.hasText(result.getMessage())
+                    ? "获取收货地址失败"
+                    : result.getMessage();
+            throw new BusinessException(ResultCode.BIZ_WARNING, message);
+        }
+        return result.getData();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deliver(String orderSn, String deliveryCompany, String deliverySn) {
+        if (!StringUtils.hasText(orderSn)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "订单号不能为空");
+        }
+        if (!StringUtils.hasText(deliveryCompany)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "物流公司不能为空");
+        }
+        if (!StringUtils.hasText(deliverySn)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "物流单号不能为空");
+        }
+
+        int rows = orderMapper.markDelivered(orderSn, deliveryCompany, deliverySn);
+        if (rows == 0) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "发货失败，订单状态异常或订单不存在");
+        }
+        log.info("订单发货成功, orderSn: {}, deliveryCompany: {}", orderSn, deliveryCompany);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmReceipt(String orderSn) {
+        if (!StringUtils.hasText(orderSn)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "订单号不能为空");
+        }
+
+        Long userId = getCurrentUserId();
+        int rows = orderMapper.markReceived(orderSn, userId);
+        if (rows == 0) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "确认收货失败，订单状态异常或订单不属于你");
+        }
+        log.info("用户确认收货成功, orderSn: {}, userId: {}", orderSn, userId);
     }
 }

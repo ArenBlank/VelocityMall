@@ -49,6 +49,14 @@ spring:
           uri: lb://velocity-mall-review
           predicates:
             - Path=/api/v1/reviews/**
+        - id: user-route
+          uri: lb://velocity-mall-user
+          predicates:
+            - Path=/api/v1/users/**
+        - id: admin-route
+          uri: lb://velocity-mall-admin
+          predicates:
+            - Path=/api/v1/admin/**
       discovery:
         locator:
           enabled: false

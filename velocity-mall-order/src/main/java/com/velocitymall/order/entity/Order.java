@@ -48,4 +48,34 @@ public class Order extends VersionedEntity {
 
     @TableField("remark")
     private String remark;
+
+    @TableField("receiver_name")
+    private String receiverName;
+
+    @TableField("receiver_phone")
+    private String receiverPhone;
+
+    @TableField("receiver_province")
+    private String receiverProvince;
+
+    @TableField("receiver_city")
+    private String receiverCity;
+
+    @TableField("receiver_region")
+    private String receiverRegion;
+
+    @TableField("receiver_detail_address")
+    private String receiverDetailAddress;
+
+    @TableField("delivery_company")
+    private String deliveryCompany;
+
+    @TableField("delivery_sn")
+    private String deliverySn;
+
+    @TableField("delivery_time")
+    private LocalDateTime deliveryTime;
+
+    @TableField("receive_time")
+    private LocalDateTime receiveTime;
 }

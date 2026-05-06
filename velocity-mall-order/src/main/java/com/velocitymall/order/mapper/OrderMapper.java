@@ -77,6 +77,33 @@ public interface OrderMapper extends BaseMapper<Order> {
             """)
     int markPaid(@Param("orderSn") String orderSn, @Param("payType") Integer payType);
 
+    @Update("""
+            UPDATE oms_order
+            SET status = 2,
+                delivery_company = #{deliveryCompany},
+                delivery_sn = #{deliverySn},
+                delivery_time = NOW(),
+                version = version + 1
+            WHERE order_sn = #{orderSn}
+              AND status = 1
+              AND is_deleted = 0
+            """)
+    int markDelivered(@Param("orderSn") String orderSn,
+                      @Param("deliveryCompany") String deliveryCompany,
+                      @Param("deliverySn") String deliverySn);
+
+    @Update("""
+            UPDATE oms_order
+            SET status = 3,
+                receive_time = NOW(),
+                version = version + 1
+            WHERE order_sn = #{orderSn}
+              AND user_id = #{userId}
+              AND status = 2
+              AND is_deleted = 0
+            """)
+    int markReceived(@Param("orderSn") String orderSn, @Param("userId") Long userId);
+
     /**
      * Count paid orders containing the specified SKU for a user.
      *
@@ -92,11 +119,11 @@ public interface OrderMapper extends BaseMapper<Order> {
             WHERE o.user_id = #{userId}
               AND o.order_sn = #{orderSn}
               AND oi.sku_id = #{skuId}
-              AND o.status = 1
+              AND o.status = 3
               AND o.is_deleted = 0
               AND oi.is_deleted = 0
             """)
-    Long countPaidSkuOrders(
+    Long countCompletedSkuOrders(
             @Param("userId") Long userId,
             @Param("orderSn") String orderSn,
             @Param("skuId") Long skuId

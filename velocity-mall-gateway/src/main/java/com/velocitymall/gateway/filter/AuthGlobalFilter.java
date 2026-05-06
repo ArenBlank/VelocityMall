@@ -35,11 +35,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     private static final String USER_ID_HEADER = "X-User-Id";
 
+    private static final String ADMIN_ID_HEADER = "X-Admin-Id";
+
     private static final String AUTHORIZATION_HEADER = "Authorization";
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private static final String[] WHITE_LIST = {
+    private static final String[] GET_WHITE_LIST = {
             "/api/v1/products/spus/**",
             "/api/v1/products/skus/*",
             "/api/v1/search/**",
@@ -47,10 +49,17 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/reviews/products/**"
     };
 
+    private static final String[] POST_WHITE_LIST = {
+            "/api/v1/users/register",
+            "/api/v1/users/login",
+            "/api/v1/admin/login"
+    };
+
     private static final String[] BLACK_LIST = {
             "/api/v1/products/inner/**",
             "/api/v1/search/inner/**",
             "/api/v1/orders/inner/**",
+            "/api/v1/users/inner/**",
             "/api/v1/products/skus/lock-stock",
             "/api/v1/products/skus/unlock-stock"
     };
@@ -79,6 +88,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         String token = request.getHeaders().getFirst(AUTHORIZATION_HEADER);
         if (!StringUtils.hasText(token) || !token.startsWith(BEARER_PREFIX)) {
             return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "缺少身份凭证");
+        }
+
+        if (path.startsWith("/api/v1/admin/")) {
+            return adminAuthFilter(exchange, chain, request, token);
         }
 
         return authenticatedFilter(exchange, chain, request, token);
@@ -128,6 +141,36 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
     }
 
+    private Mono<Void> adminAuthFilter(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            ServerHttpRequest request,
+            String token
+    ) {
+        try {
+            Claims claims = parseClaims(token.substring(BEARER_PREFIX.length()));
+            Object adminIdObj = claims.get("adminId");
+            if (adminIdObj == null) {
+                return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "非法的管理后台凭证");
+            }
+            String adminId = String.valueOf(adminIdObj);
+            if (!StringUtils.hasText(adminId) || "null".equals(adminId)) {
+                return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "凭证无效");
+            }
+
+            ServerHttpRequest mutatedRequest = request.mutate()
+                    .headers(headers -> {
+                        headers.remove(ADMIN_ID_HEADER);
+                        headers.set(ADMIN_ID_HEADER, adminId);
+                    })
+                    .build();
+            return chain.filter(exchange.mutate().request(mutatedRequest).build());
+        } catch (Exception exception) {
+            log.error("Admin JWT 解析失败: {}", exception.getMessage());
+            return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "凭证已过期或非法");
+        }
+    }
+
     private Claims parseClaims(String token) {
         Key key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
         return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
@@ -143,22 +186,38 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isWhiteRequest(ServerHttpRequest request, String path) {
-        if (!HttpMethod.GET.equals(request.getMethod())) {
-            return false;
+        if (HttpMethod.GET.equals(request.getMethod())) {
+            return matchesGetWhiteList(path);
         }
-        if (pathMatcher.match(WHITE_LIST[0], path)) {
+        if (HttpMethod.POST.equals(request.getMethod())) {
+            return matchesPostWhiteList(path);
+        }
+        return false;
+    }
+
+    private boolean matchesGetWhiteList(String path) {
+        if (pathMatcher.match(GET_WHITE_LIST[0], path)) {
             return true;
         }
-        if (pathMatcher.match(WHITE_LIST[1], path)) {
+        if (pathMatcher.match(GET_WHITE_LIST[1], path)) {
             return isNumericSkuPath(path);
         }
-        if (pathMatcher.match(WHITE_LIST[2], path)) {
+        if (pathMatcher.match(GET_WHITE_LIST[2], path)) {
             return true;
         }
-        if (pathMatcher.match(WHITE_LIST[3], path)) {
+        if (pathMatcher.match(GET_WHITE_LIST[3], path)) {
             return true;
         }
-        return pathMatcher.match(WHITE_LIST[4], path);
+        return pathMatcher.match(GET_WHITE_LIST[4], path);
+    }
+
+    private boolean matchesPostWhiteList(String path) {
+        for (String pattern : POST_WHITE_LIST) {
+            if (pathMatcher.match(pattern, path)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isNumericSkuPath(String path) {

@@ -83,3 +83,143 @@ jobs:
         with:
           name: full-chain-e2e-logs
           path: build/ci-e2e-logs
+
+  performance-tests:
+    name: k6 Load & Chaos Tests (CI Mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: full-chain-e2e
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: velocity_mall
+        ports:
+          - 3306:3306
+        options: >-
+          --character-set-server=utf8mb4
+          --collation-server=utf8mb4_unicode_ci
+
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build executable jars
+        run: mvn -B -ntp -DskipTests package
+
+      - name: Start Nacos
+        run: |
+          docker run -d --name ci-nacos \
+            -p 8848:8848 -p 9848:9848 \
+            -e MODE=standalone \
+            nacos/nacos-server:v2.2.3
+          # Wait for Nacos
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8848/nacos/v1/console/health/readiness > /dev/null 2>&1; then
+              echo "Nacos ready"; break
+            fi
+            sleep 2
+          done
+
+      - name: Seed Database
+        run: |
+          for i in $(seq 1 60); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent 2>/dev/null; then
+              echo "MySQL ready"; break
+            fi
+            sleep 1
+          done
+          mysql -h 127.0.0.1 -uroot -proot --default-character-set=utf8mb4 velocity_mall << 'SQL'
+          CREATE TABLE IF NOT EXISTS ums_user (
+              id BIGINT NOT NULL, username VARCHAR(64) NOT NULL, password VARCHAR(255) NOT NULL,
+              nickname VARCHAR(64) DEFAULT NULL, phone VARCHAR(20) DEFAULT NULL,
+              status TINYINT NOT NULL DEFAULT 1, create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              is_deleted TINYINT NOT NULL DEFAULT 0,
+              PRIMARY KEY (id), UNIQUE KEY uk_username (username)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+          CREATE TABLE IF NOT EXISTS pms_sku (
+              id BIGINT NOT NULL, spu_id BIGINT NOT NULL, sku_name VARCHAR(128) NOT NULL,
+              sku_code VARCHAR(64) NOT NULL, price DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+              stock INT NOT NULL DEFAULT 0, lock_stock INT NOT NULL DEFAULT 0,
+              sale_count INT NOT NULL DEFAULT 0, cover_img VARCHAR(255) DEFAULT NULL,
+              version INT NOT NULL DEFAULT 0, create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              is_deleted TINYINT NOT NULL DEFAULT 0,
+              PRIMARY KEY (id), UNIQUE KEY uk_sku_code (sku_code)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+          INSERT INTO pms_sku (id, spu_id, sku_name, sku_code, price, stock, lock_stock, sale_count, version)
+          VALUES (2001, 1001, 'Velocity Phone Pro 512G', 'VM-PHONE-512G', 7999.00, 100, 0, 0, 0);
+          SQL
+
+      - name: Start Services (Gateway + User + Product + Seckill)
+        run: |
+          for svc in product seckill gateway user; do
+            jar=$(find velocity-mall-${svc}/target -maxdepth 1 -name "*.jar" ! -name "*sources*" ! -name "*javadoc*" | head -1)
+            java -Xms128m -Xmx256m -jar "$jar" > /tmp/${svc}.log 2>&1 &
+            echo "Started $svc PID $!"
+          done
+          for port in 8080 8081 8083 8088; do
+            for i in $(seq 1 45); do
+              if curl -fsS -o /dev/null "http://127.0.0.1:${port}" 2>/dev/null; then
+                echo "Port ${port} ready"; break
+              fi
+              sleep 2
+            done
+          done
+          sleep 10
+          echo "All services up"
+
+      - name: Install k6
+        run: |
+          curl -sS https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq k6
+          k6 version
+
+      - name: Generate Test Users
+        run: |
+          cd scripts/performance
+          python3 generate_users.py
+          python3 -c "import json; print(f'{len(json.load(open(\"users.json\")))} users ready')"
+
+      - name: Run k6 Multi-User Seckill (CI mode)
+        run: |
+          cd scripts/performance
+          CI=true k6 run --summary-export=multi-user-summary.json multi-user-seckill-test.js
+          echo "--- summary ---"
+          python3 -c "import json; s=json.load(open('multi-user-summary.json')); m=s.get('metrics',{}); print(f'reqs={m.get(\"http_reqs\",{}).get(\"count\",\"?\")}, p95={m.get(\"http_req_duration\",{}).get(\"p(95)\",\"?\")}ms')"
+
+      - name: Run k6 Chaos Spike (CI mode)
+        run: |
+          cd scripts/performance
+          CI=true k6 run --summary-export=chaos-summary.json chaos-spike-test.js
+          echo "--- summary ---"
+          python3 -c "import json; s=json.load(open('chaos-summary.json')); m=s.get('metrics',{}); print(f'reqs={m.get(\"http_reqs\",{}).get(\"count\",\"?\")}, p95={m.get(\"http_req_duration\",{}).get(\"p(95)\",\"?\")}ms')"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          for f in /tmp/*.log; do
+            echo "========== $f =========="
+            tail -80 "$f" || true
+          done

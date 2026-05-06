@@ -1,5 +1,6 @@
 package com.velocitymall.product.controller;
 
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
 import com.velocitymall.common.model.dto.ProductSkuSearchDTO;
 import com.velocitymall.common.model.dto.StockLockDTO;
 import com.velocitymall.common.model.vo.PageVO;
@@ -15,6 +16,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 商品展示与库存内部接口。
  */
+@Slf4j
 @Validated
 @RestController
 @RequiredArgsConstructor
@@ -57,12 +60,31 @@ public class ProductController {
      * @param skuId SKU ID
      * @return SKU 详情
      */
+    @SentinelResource(value = "getSkuInfo", fallback = "skuInfoFallback")
     @GetMapping("/skus/{sku-id}")
     public Result<SkuVO> getSkuById(
             @PathVariable("sku-id")
             @NotNull(message = "SKU ID不能为空")
             @Min(value = 1, message = "SKU ID必须大于0") Long skuId) {
+        // Chaos engineering: 50% fault injection — simulate DB hung for 5s
+        if (Math.random() < 0.5) {
+            log.warn("🔥 Chaos fault injected! SKU {} — sleeping 5s to simulate DB hang", skuId);
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         return Result.success(skuService.getSkuById(skuId));
+    }
+
+    /**
+     * Sentinel fallback — invoked when the main method times out or throws.
+     */
+    public Result<SkuVO> skuInfoFallback(Long skuId, Throwable ex) {
+        log.error("Sentinel fallback triggered for SKU {}. Cause: {}", skuId,
+                ex != null ? ex.getClass().getSimpleName() : "unknown", ex);
+        return Result.failed(50001, "【系统降级保护生效】当前访问人数过多，底层服务卡顿，请稍后重试。");
     }
 
     /**

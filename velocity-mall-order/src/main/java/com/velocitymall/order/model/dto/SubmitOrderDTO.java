@@ -18,4 +18,8 @@ public class SubmitOrderDTO {
 
     @NotEmpty(message = "SKU ID列表不能为空")
     private List<@NotNull(message = "SKU ID不能为空") @Min(value = 1, message = "SKU ID必须大于0") Long> skuIds;
+
+    @NotNull(message = "收货地址ID不能为空")
+    @Min(value = 1, message = "收货地址ID必须大于0")
+    private Long addressId;
 }

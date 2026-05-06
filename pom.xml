@@ -21,6 +21,8 @@
         <module>velocity-mall-search</module>
         <module>velocity-mall-coupon</module>
         <module>velocity-mall-review</module>
+        <module>velocity-mall-user</module>
+        <module>velocity-mall-admin</module>
     </modules>
 
     <properties>

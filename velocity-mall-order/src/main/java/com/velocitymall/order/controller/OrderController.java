@@ -128,7 +128,7 @@ public class OrderController {
      * @param userId user ID
      * @param orderSn order number
      * @param skuId SKU ID
-     * @return true if the user has paid for the SKU
+     * @return true if the user has a completed order containing the SKU
      */
     @GetMapping("/inner/check-purchase")
     public Result<Boolean> checkPurchase(
@@ -137,5 +137,37 @@ public class OrderController {
             @RequestParam("skuId") @Min(1) Long skuId
     ) {
         return Result.success(orderService.checkPurchase(userId, orderSn, skuId));
+    }
+
+    /**
+     * Mark a paid order as delivered (internal admin simulation).
+     *
+     * @param orderSn order number
+     * @param deliveryCompany logistics company name
+     * @param deliverySn delivery tracking number
+     * @return success result
+     */
+    @PostMapping("/inner/{order-sn}/deliver")
+    public Result<Void> deliver(
+            @NotBlank @PathVariable("order-sn") String orderSn,
+            @NotBlank @RequestParam("deliveryCompany") String deliveryCompany,
+            @NotBlank @RequestParam("deliverySn") String deliverySn
+    ) {
+        orderService.deliver(orderSn, deliveryCompany, deliverySn);
+        return Result.success();
+    }
+
+    /**
+     * Confirm receipt of a delivered order.
+     *
+     * @param orderSn order number
+     * @return success result
+     */
+    @PutMapping("/{order-sn}/confirm-receipt")
+    public Result<Void> confirmReceipt(
+            @NotBlank @PathVariable("order-sn") String orderSn
+    ) {
+        orderService.confirmReceipt(orderSn);
+        return Result.success();
     }
 }

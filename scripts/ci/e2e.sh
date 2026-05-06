@@ -4,9 +4,14 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="${ROOT_DIR}/docker/docker-compose.e2e.yml"
 LOG_DIR="${ROOT_DIR}/build/ci-e2e-logs"
-VALID_JWT="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMDAwMSJ9.gO06k1moG99ujial-2CkEtGQtkE-vKf59mgOKA9RScU"
-AUTH_HEADER="Authorization: Bearer ${VALID_JWT}"
 JSON_HEADER="Content-Type: application/json"
+
+# Will be populated after user registration and admin login
+USER_TOKEN=""
+USER_ID=""
+USER_AUTH_HEADER=""
+ADMIN_TOKEN=""
+ADMIN_AUTH_HEADER=""
 
 declare -a APP_PIDS=()
 
@@ -94,7 +99,7 @@ wait_for_nacos_service() {
 
 wait_for_mysql() {
   for ((i = 1; i <= 180; i++)); do
-    if docker exec velocity-e2e-mysql mysqladmin ping -uroot -proot --silent >/dev/null 2>&1; then
+    if docker exec velocity-e2e-mysql mysqladmin ping -h 127.0.0.1 -uroot -proot --silent >/dev/null 2>&1; then
       echo "MySQL is ready"
       return 0
     fi
@@ -106,12 +111,12 @@ wait_for_mysql() {
 }
 
 mysql_exec() {
-  docker exec -i velocity-e2e-mysql mysql -uroot -proot --default-character-set=utf8mb4 "$@"
+  docker exec -i velocity-e2e-mysql mysql -h 127.0.0.1 -uroot -proot --default-character-set=utf8mb4 "$@"
 }
 
 mysql_scalar() {
   local query=$1
-  docker exec velocity-e2e-mysql mysql -uroot -proot --default-character-set=utf8mb4 -D velocity_mall \
+  docker exec velocity-e2e-mysql mysql -h 127.0.0.1 -uroot -proot --default-character-set=utf8mb4 -D velocity_mall \
     -N -B -e "${query}" 2>/dev/null | head -n 1 | tr -d '\r'
 }
 
@@ -223,7 +228,10 @@ import sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     value = json.load(f)
 for part in sys.argv[2].split("."):
-    value = value[part]
+    try:
+        value = value[int(part)]
+    except (ValueError, TypeError):
+        value = value[part]
 if not isinstance(value, list) or not value:
     raise SystemExit(f"Expected non-empty list at {sys.argv[2]}, got: {value}")
 PY
@@ -239,7 +247,10 @@ import sys
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     value = json.load(f)
 for part in sys.argv[2].split("."):
-    value = value[part]
+    try:
+        value = value[int(part)]
+    except (ValueError, TypeError):
+        value = value[part]
 print(value)
 PY
 }
@@ -408,6 +419,16 @@ CREATE TABLE oms_order (
     order_type INT NOT NULL DEFAULT 0,
     status INT NOT NULL DEFAULT 0,
     remark VARCHAR(500) DEFAULT NULL,
+    receiver_name VARCHAR(32) DEFAULT NULL,
+    receiver_phone VARCHAR(20) DEFAULT NULL,
+    receiver_province VARCHAR(32) DEFAULT NULL,
+    receiver_city VARCHAR(32) DEFAULT NULL,
+    receiver_region VARCHAR(32) DEFAULT NULL,
+    receiver_detail_address VARCHAR(255) DEFAULT NULL,
+    delivery_company VARCHAR(64) DEFAULT NULL,
+    delivery_sn VARCHAR(64) DEFAULT NULL,
+    delivery_time DATETIME DEFAULT NULL,
+    receive_time DATETIME DEFAULT NULL,
     version INT NOT NULL DEFAULT 0,
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -488,6 +509,85 @@ INSERT INTO sms_coupon
 (id, name, amount, min_point, stock, limit_per_user, start_time, end_time, status, version, create_time, update_time, is_deleted)
 VALUES
     (3001, 'E2E Coupon', 100.00, 1000.00, 10, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 1 DAY), 1, 0, NOW(), NOW(), 0);
+CREATE TABLE ums_user (
+    id BIGINT NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    nickname VARCHAR(64) DEFAULT NULL,
+    phone VARCHAR(20) DEFAULT NULL,
+    status TINYINT NOT NULL DEFAULT 1,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ums_user_address (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    receiver_name VARCHAR(32) NOT NULL,
+    receiver_phone VARCHAR(20) NOT NULL,
+    province VARCHAR(32) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    region VARCHAR(32) NOT NULL,
+    detail_address VARCHAR(255) NOT NULL,
+    is_default TINYINT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ums_admin (
+    id BIGINT NOT NULL,
+    username VARCHAR(64) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    real_name VARCHAR(64) DEFAULT NULL,
+    status TINYINT NOT NULL DEFAULT 1,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO ums_admin (id, username, password, real_name, status)
+VALUES (1, 'admin', '$2a$10$j/jaxAC8fXLIrZH361eoye3cvkCoPDPcDcCTcDJ7uphwG8h0.L0bS', 'E2E Admin', 1);
+
+CREATE TABLE oms_product_review (
+    id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    order_sn VARCHAR(64) NOT NULL,
+    sku_id BIGINT NOT NULL,
+    spu_id BIGINT NOT NULL,
+    rating TINYINT NOT NULL,
+    content VARCHAR(1000) NOT NULL,
+    has_pictures TINYINT NOT NULL DEFAULT 0,
+    like_count INT NOT NULL DEFAULT 0,
+    dislike_count INT NOT NULL DEFAULT 0,
+    reply_count INT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    KEY idx_spu_id (spu_id),
+    UNIQUE KEY uk_user_order_sku (user_id, order_sn, sku_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE oms_review_interaction (
+    id BIGINT NOT NULL,
+    review_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    interaction_type TINYINT NOT NULL,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_review_user (review_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SQL
 
   redis_cli FLUSHALL >/dev/null
@@ -514,6 +614,9 @@ start_app velocity-mall-seckill seckill 8083
 start_app velocity-mall-search search 8085
 start_app velocity-mall-coupon coupon 8086
 start_app velocity-mall-gateway gateway 8080
+start_app velocity-mall-user user 8088
+start_app velocity-mall-admin admin 8089
+start_app velocity-mall-review review 8087
 
 echo "Waiting for Nacos registrations to propagate..."
 wait_for_nacos_service velocity-mall-product
@@ -521,7 +624,37 @@ wait_for_nacos_service velocity-mall-order
 wait_for_nacos_service velocity-mall-seckill
 wait_for_nacos_service velocity-mall-search
 wait_for_nacos_service velocity-mall-coupon
+wait_for_nacos_service velocity-mall-user
+wait_for_nacos_service velocity-mall-admin
+wait_for_nacos_service velocity-mall-review
 sleep 5
+
+echo "=== Setting up test accounts ==="
+
+# Register C-end test user
+USER_REGISTER="${LOG_DIR}/user-register.json"
+call_once_success "user register" POST "http://127.0.0.1:8080/api/v1/users/register" "${USER_REGISTER}"   -H "${JSON_HEADER}"   -d '{"username":"e2euser","password":"e2epass123"}'
+
+# Login to get user JWT
+USER_LOGIN="${LOG_DIR}/user-login.json"
+call_once_success "user login" POST "http://127.0.0.1:8080/api/v1/users/login" "${USER_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"e2euser","password":"e2epass123"}'
+USER_TOKEN="$(json_path "${USER_LOGIN}" "data.token")"
+USER_ID="$(json_path "${USER_LOGIN}" "data.user.id")"
+USER_AUTH_HEADER="Authorization: Bearer ${USER_TOKEN}"
+echo "C-end user registered: id=${USER_ID}"
+
+# Create shipping address
+ADDRESS_RESP="${LOG_DIR}/user-address.json"
+call_once_success "create address" POST "http://127.0.0.1:8080/api/v1/users/addresses" "${ADDRESS_RESP}"   -H "${USER_AUTH_HEADER}"   -H "${JSON_HEADER}"   -d '{"receiverName":"E2E Tester","receiverPhone":"13800138000","province":"Shanghai","city":"Shanghai","region":"Pudong","detailAddress":"No.1 Test Road","isDefault":1}'
+ADDRESS_ID="$(json_path "${ADDRESS_RESP}" "data.id")"
+echo "Shipping address created: id=${ADDRESS_ID}"
+
+# Login admin to get admin JWT
+ADMIN_LOGIN="${LOG_DIR}/admin-login.json"
+call_once_success "admin login" POST "http://127.0.0.1:8080/api/v1/admin/login" "${ADMIN_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"admin","password":"123456"}'
+ADMIN_TOKEN="$(json_path "${ADMIN_LOGIN}" "data.token")"
+ADMIN_AUTH_HEADER="Authorization: Bearer ${ADMIN_TOKEN}"
+echo "Admin logged in"
 
 category_response="${LOG_DIR}/category-tree.json"
 call_until_success "category tree" GET "http://127.0.0.1:8080/api/v1/categories/tree" "${category_response}"
@@ -544,7 +677,7 @@ assert_json_code "${coupon_unauthorized}" 40100
 
 inner_response="${LOG_DIR}/product-inner-forbidden.json"
 inner_status="$(request_status PUT "http://127.0.0.1:8080/api/v1/products/inner/skus/lock-batch" "${inner_response}" \
-  -H "${AUTH_HEADER}" \
+  -H "${USER_AUTH_HEADER}" \
   -H "${JSON_HEADER}" \
   -d '{"orderSn":"E2E_FORBIDDEN","items":[{"skuId":2001,"quantity":1}]}')"
 if [[ "${inner_status}" != "403" ]]; then
@@ -556,13 +689,13 @@ assert_json_code "${inner_response}" 40300
 
 coupon_claim="${LOG_DIR}/coupon-claim.json"
 call_once_success "coupon claim" POST "http://127.0.0.1:8080/api/v1/coupons/3001/claim" "${coupon_claim}" \
-  -H "${AUTH_HEADER}"
+  -H "${USER_AUTH_HEADER}"
 wait_mysql_equals "SELECT stock FROM sms_coupon WHERE id = 3001" "9" "coupon stock after first claim"
-wait_mysql_equals "SELECT COUNT(1) FROM sms_coupon_history WHERE coupon_id = 3001 AND user_id = 10001" "1" "coupon history count"
+wait_mysql_equals "SELECT COUNT(1) FROM sms_coupon_history WHERE coupon_id = 3001 AND user_id = ${USER_ID}" "1" "coupon history count"
 
 coupon_repeat="${LOG_DIR}/coupon-repeat.json"
 coupon_repeat_status="$(request_status POST "http://127.0.0.1:8080/api/v1/coupons/3001/claim" "${coupon_repeat}" \
-  -H "${AUTH_HEADER}")"
+  -H "${USER_AUTH_HEADER}")"
 if [[ "${coupon_repeat_status}" != "200" ]]; then
   echo "Expected repeat coupon claim HTTP 200 business warning, got ${coupon_repeat_status}"
   cat "${coupon_repeat}" || true
@@ -573,55 +706,151 @@ wait_mysql_equals "SELECT stock FROM sms_coupon WHERE id = 3001" "9" "coupon sto
 
 cart_add="${LOG_DIR}/cart-add.json"
 call_once_success "cart add" POST "http://127.0.0.1:8080/api/v1/carts/items" "${cart_add}" \
-  -H "${AUTH_HEADER}" \
+  -H "${USER_AUTH_HEADER}" \
   -H "${JSON_HEADER}" \
-  -d '{"skuId":2001,"quantity":2}'
+  -d '{"skuId":2001,"quantity":1}'
 
 cart_list="${LOG_DIR}/cart-list.json"
 call_until_success "cart list" GET "http://127.0.0.1:8080/api/v1/carts/items" "${cart_list}" \
-  -H "${AUTH_HEADER}"
+  -H "${USER_AUTH_HEADER}"
 assert_json_data_non_empty_list "${cart_list}" "data"
 
+# ============================================
+# Main positive flow: order -> pay -> deliver -> confirm -> review
+# ============================================
 order_create="${LOG_DIR}/normal-order-create.json"
-call_once_success "normal order create" POST "http://127.0.0.1:8080/api/v1/orders" "${order_create}" \
-  -H "${AUTH_HEADER}" \
+call_once_success "order create" POST "http://127.0.0.1:8080/api/v1/orders" "${order_create}" \
+  -H "${USER_AUTH_HEADER}" \
   -H "${JSON_HEADER}" \
-  -d '{"skuIds":[2001]}'
+  -d "{\"skuIds\":[2001],\"addressId\":${ADDRESS_ID}}"
 order_sn="$(json_path "${order_create}" "data.orderSn")"
-echo "Normal order created: ${order_sn}"
+echo "Order created: ${order_sn}"
 
-wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "2" "locked stock after normal order"
-wait_mysql_equals "SELECT status FROM pms_stock_lock_log WHERE order_sn = '${order_sn}' AND sku_id = 2001" "0" "stock lock log after normal order"
-wait_mysql_equals "SELECT COUNT(1) FROM oms_order_item WHERE order_sn = '${order_sn}' AND sku_name = 'Velocity Phone Pro 512G'" "1" "normal order item snapshot"
+wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "1" "locked stock after order"
+wait_mysql_equals "SELECT status FROM pms_stock_lock_log WHERE order_sn = '${order_sn}' AND sku_id = 2001" "0" "stock lock log after order"
+wait_mysql_equals "SELECT COUNT(1) FROM oms_order_item WHERE order_sn = '${order_sn}' AND sku_name = 'Velocity Phone Pro 512G'" "1" "order item snapshot"
 
-pay_response="${LOG_DIR}/normal-order-pay.json"
-call_once_success "normal order pay" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock?orderSn=${order_sn}&payType=1" "${pay_response}" \
-  -H "${AUTH_HEADER}"
-wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "normal order paid status"
-wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "98" "stock after payment"
+# Mock payment
+pay_response="${LOG_DIR}/order-pay.json"
+call_once_success "order pay" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock?orderSn=${order_sn}&payType=1" "${pay_response}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "order paid status"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after payment"
 wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "0" "locked stock after payment"
-wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "2" "sale count after payment"
+wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after payment"
 wait_mysql_equals "SELECT status FROM pms_stock_lock_log WHERE order_sn = '${order_sn}' AND sku_id = 2001" "2" "stock lock log after payment"
 wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'payment-success-topic' AND consumer_group = 'payment-success-consumer-group' AND order_sn = '${order_sn}'" "1" "payment consume log"
 
-refund_response="${LOG_DIR}/normal-order-refund.json"
-call_once_success "normal order refund" POST "http://127.0.0.1:8080/api/v1/orders/${order_sn}/refund/mock" "${refund_response}" \
-  -H "${AUTH_HEADER}"
-wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "5" "normal order refunded status"
-wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "100" "stock after refund"
-wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "0" "sale count after refund"
-wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'order-refund-topic' AND consumer_group = 'order-refund-consumer-group' AND order_sn = '${order_sn}'" "1" "refund consume log"
+# Admin deliver (B-end operates on C-end order)
+deliver_resp="${LOG_DIR}/admin-deliver.json"
+call_once_success "admin deliver" POST "http://127.0.0.1:8080/api/v1/admin/orders/${order_sn}/deliver?deliveryCompany=SFExpress&deliverySn=SF9988776655" "${deliver_resp}" \
+  -H "${ADMIN_AUTH_HEADER}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "2" "order delivered status"
+wait_mysql_equals "SELECT delivery_company FROM oms_order WHERE order_sn = '${order_sn}'" "SFExpress" "delivery company persisted"
+wait_mysql_equals "SELECT delivery_sn FROM oms_order WHERE order_sn = '${order_sn}'" "SF9988776655" "delivery sn persisted"
 
+# C-end confirm receipt
+confirm_resp="${LOG_DIR}/confirm-receipt.json"
+call_once_success "confirm receipt" PUT "http://127.0.0.1:8080/api/v1/orders/${order_sn}/confirm-receipt" "${confirm_resp}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "3" "order completed status"
+
+# Allow Nacos routing cache to warm up before first Feign call from review -> order
+echo "Waiting for Nacos routing propagation (Feign load-balancer cache)..."
+sleep 10
+
+# Create review (purchase verification via Feign -- order is completed, should pass)
+review_create="${LOG_DIR}/review-create.json"
+call_once_success "review create" POST "http://127.0.0.1:8080/api/v1/reviews" "${review_create}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"orderSn\":\"${order_sn}\",\"skuId\":2001,\"spuId\":1001,\"rating\":5,\"content\":\"Excellent product! Full-chain E2E verified.\"}"
+echo "Review created for order: ${order_sn}"
+
+# Verify review appears in product listing
+review_list="${LOG_DIR}/review-list.json"
+call_once_success "review list" GET "http://127.0.0.1:8080/api/v1/reviews/products/1001?page=1&size=10" "${review_list}"
+assert_json_data_non_empty_list "${review_list}" "data.records"
+review_id="$(json_path "${review_list}" "data.records.0.id")"
+echo "Review ID: ${review_id}"
+
+# Like the review
+like_resp="${LOG_DIR}/review-like.json"
+call_once_success "review like" POST "http://127.0.0.1:8080/api/v1/reviews/${review_id}/interaction" "${like_resp}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"interactionType":1}'
+wait_mysql_equals "SELECT like_count FROM oms_product_review WHERE id = ${review_id}" "1" "review like_count after like"
+
+# Switch like to dislike (verify toggle works)
+dislike_resp="${LOG_DIR}/review-dislike.json"
+call_once_success "review dislike (toggle)" POST "http://127.0.0.1:8080/api/v1/reviews/${review_id}/interaction" "${dislike_resp}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"interactionType":2}'
+wait_mysql_equals "SELECT like_count FROM oms_product_review WHERE id = ${review_id}" "0" "review like_count after toggle to dislike"
+wait_mysql_equals "SELECT dislike_count FROM oms_product_review WHERE id = ${review_id}" "1" "review dislike_count after toggle"
+
+# Anonymous review stats (no auth header)
+stats_resp="${LOG_DIR}/review-stats-anon.json"
+stats_status="$(request_status GET "http://127.0.0.1:8080/api/v1/reviews/products/1001/stats" "${stats_resp}")"
+if [[ "${stats_status}" != "200" ]]; then
+  echo "Expected review stats HTTP 200, got ${stats_status}"
+  cat "${stats_resp}" || true
+  exit 1
+fi
+assert_success_response "${stats_resp}"
+
+# Delete the review
+call_once_success "review delete" DELETE "http://127.0.0.1:8080/api/v1/reviews/${review_id}" "${LOG_DIR}/review-delete.json" \
+  -H "${USER_AUTH_HEADER}"
+
+# ============================================
+# Refund test: separate order for reverse flow
+# ============================================
+cart_add2="${LOG_DIR}/cart-add-refund.json"
+call_once_success "cart add (refund test)" POST "http://127.0.0.1:8080/api/v1/carts/items" "${cart_add2}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"skuId":2001,"quantity":1}'
+
+order_create2="${LOG_DIR}/order-refund-test.json"
+call_once_success "order create (refund test)" POST "http://127.0.0.1:8080/api/v1/orders" "${order_create2}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"skuIds\":[2001],\"addressId\":${ADDRESS_ID}}"
+order_sn_rf="$(json_path "${order_create2}" "data.orderSn")"
+echo "Refund test order: ${order_sn_rf}"
+
+pay_rf="${LOG_DIR}/order-refund-pay.json"
+call_once_success "refund order pay" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock?orderSn=${order_sn_rf}&payType=1" "${pay_rf}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn_rf}'" "1" "refund order paid status"
+
+refund_response="${LOG_DIR}/order-refund.json"
+call_once_success "order refund" POST "http://127.0.0.1:8080/api/v1/orders/${order_sn_rf}/refund/mock" "${refund_response}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn_rf}'" "5" "order refunded status"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after refund"
+wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after refund"
+wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'order-refund-topic' AND consumer_group = 'order-refund-consumer-group' AND order_sn = '${order_sn_rf}'" "1" "refund consume log"
+
+# ============================================
+# Seckill
+# ============================================
 redis_cli DEL velocitymall:seckill:stock:2001 velocitymall:seckill:bought:2001 >/dev/null
 redis_cli SET velocitymall:seckill:stock:2001 5 >/dev/null
 seckill_response="${LOG_DIR}/seckill-execute.json"
 call_once_success "seckill execute" POST "http://127.0.0.1:8080/api/v1/seckill/execute/2001" "${seckill_response}" \
-  -H "${AUTH_HEADER}"
+  -H "${USER_AUTH_HEADER}"
 wait_redis_equals "seckill stock after execute" "4" GET velocitymall:seckill:stock:2001
-wait_redis_equals "seckill bought marker" "1" SISMEMBER velocitymall:seckill:bought:2001 10001
-seckill_order_sn="$(wait_mysql_non_empty "SELECT order_sn FROM oms_order WHERE order_sn LIKE 'SEC_%' AND user_id = 10001 AND order_type = 1 LIMIT 1" "seckill order persisted" 120)"
+wait_redis_equals "seckill bought marker" "1" SISMEMBER velocitymall:seckill:bought:2001 ${USER_ID}
+seckill_order_sn="$(wait_mysql_non_empty "SELECT order_sn FROM oms_order WHERE order_sn LIKE 'SEC_%' AND user_id = ${USER_ID} AND order_type = 1 LIMIT 1" "seckill order persisted" 120)"
 wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${seckill_order_sn}'" "0" "seckill order wait-pay status"
 
+# ============================================
+# Search
+# ============================================
 rebuild_response="${LOG_DIR}/search-rebuild.json"
 call_until_success "search index rebuild" POST "http://127.0.0.1:8085/api/v1/search/inner/skus/rebuild-index" "${rebuild_response}"
 
@@ -631,7 +860,7 @@ assert_json_data_non_empty_list "${search_response}" "data.records"
 
 search_inner_forbidden="${LOG_DIR}/search-inner-forbidden.json"
 search_inner_status="$(request_status POST "http://127.0.0.1:8080/api/v1/search/inner/skus/rebuild-index" "${search_inner_forbidden}" \
-  -H "${AUTH_HEADER}")"
+  -H "${USER_AUTH_HEADER}")"
 if [[ "${search_inner_status}" != "403" ]]; then
   echo "Expected search inner API HTTP 403, got ${search_inner_status}"
   cat "${search_inner_forbidden}" || true

@@ -1,0 +1,35 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: velocity-mall-admin
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/velocity_mall?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+
+jwt:
+  secret: 7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D
+  expiration: 604800000
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-value: 1
+      logic-not-delete-value: 0

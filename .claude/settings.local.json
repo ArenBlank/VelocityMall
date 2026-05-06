@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -pl velocity-mall-common,velocity-mall-admin -q -DskipTests compile)",
+      "Bash(mvn -pl velocity-mall-admin -q exec:java -Dexec.mainClass=\"org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder\")",
+      "Bash(java -cp \"velocity-mall-admin/target/velocity-mall-admin-1.0.0-SNAPSHOT.jar\" org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder)",
+      "Bash(mvn -pl velocity-mall-common -q -DskipTests install)",
+      "Bash(mvn -pl velocity-mall-admin -q -DskipTests install)",
+      "Bash(mvn -q -DskipTests install -N)",
+      "Bash(mvn -pl velocity-mall-admin -q dependency:build-classpath -DincludeScope=compile -Dmdep.outputFile=/tmp/cp.txt)",
+      "Read(//tmp/**)",
+      "Bash(java *)",
+      "Bash(cygpath -w /tmp/BcryptGen.class)",
+      "Bash(wslpath -w /tmp/BcryptGen.class)",
+      "Bash(cp /tmp/BcryptGen.class .)",
+      "Bash(rm BcryptGen.class)",
+      "Bash(mvn -q -DskipTests compile)"
+    ]
+  }
+}

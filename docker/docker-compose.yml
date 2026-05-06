@@ -138,6 +138,72 @@ services:
     networks:
       - velocity-mall-network
 
+  velocity-mall-user:
+    image: openjdk:17-jdk-alpine
+    container_name: user-container-velocity
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx256m"
+      TZ: Asia/Shanghai
+    ports:
+      - "8088:8088"
+    volumes:
+      - ../velocity-mall-user/target:/app
+    command:
+      - java
+      - -jar
+      - /app/velocity-mall-user-1.0.0-SNAPSHOT.jar
+    networks:
+      - velocity-mall-network
+
+  velocity-mall-admin:
+    image: openjdk:17-jdk-alpine
+    container_name: admin-container-velocity
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx256m"
+      TZ: Asia/Shanghai
+    ports:
+      - "8089:8089"
+    volumes:
+      - ../velocity-mall-admin/target:/app
+    command:
+      - java
+      - -jar
+      - /app/velocity-mall-admin-1.0.0-SNAPSHOT.jar
+    networks:
+      - velocity-mall-network
+
+  velocity-mall-review:
+    image: openjdk:17-jdk-alpine
+    container_name: review-container-velocity
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx256m"
+      TZ: Asia/Shanghai
+    ports:
+      - "8087:8087"
+    volumes:
+      - ../velocity-mall-review/target:/app
+    command:
+      - java
+      - -jar
+      - /app/velocity-mall-review-1.0.0-SNAPSHOT.jar
+    networks:
+      - velocity-mall-network
+
 networks:
   velocity-mall-network:
     driver: bridge
