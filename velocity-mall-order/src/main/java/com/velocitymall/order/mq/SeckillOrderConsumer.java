@@ -1,5 +1,6 @@
 package com.velocitymall.order.mq;
 
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +35,14 @@ public class SeckillOrderConsumer implements RocketMQListener<SeckillOrderDTO> {
 
     @Override
     public void onMessage(SeckillOrderDTO message) {
+        MqTraceContext.runWithTrace(message, () -> handleMessage(message));
+    }
+
+    private void handleMessage(SeckillOrderDTO message) {
         log.info("Received seckill order message. orderSn: {}, skuId: {}, userId: {}",
                 message.getOrderSn(), message.getSkuId(), message.getUserId());
         try {
+            MqTraceContext.prepare(message, message.getOrderSn());
             orderService.createSeckillOrder(message);
             rocketMQTemplate.syncSend(
                     SECKILL_DELAY_TOPIC,

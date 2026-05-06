@@ -54,10 +54,10 @@ public class OrderController {
     @GetMapping
     public Result<PageVO<OrderDetailVO>> listMyOrders(
             @Min(value = 1, message = "page must be greater than 0")
-            @RequestParam(defaultValue = "1") Long page,
+            @RequestParam(value = "page", defaultValue = "1") Long page,
             @Min(value = 1, message = "size must be greater than 0")
-            @RequestParam(defaultValue = "10") Long size,
-            @RequestParam(required = false) Integer status
+            @RequestParam(value = "size", defaultValue = "10") Long size,
+            @RequestParam(value = "status", required = false) Integer status
     ) {
         return Result.success(orderService.listMyOrders(page, size, status));
     }
@@ -100,8 +100,8 @@ public class OrderController {
      */
     @PostMapping("/pay/mock")
     public Result<Void> mockPaySuccess(
-            @NotBlank(message = "orderSn cannot be blank") @RequestParam String orderSn,
-            @NotNull(message = "payType cannot be null") @RequestParam Integer payType
+            @NotBlank(message = "orderSn cannot be blank") @RequestParam("orderSn") String orderSn,
+            @NotNull(message = "payType cannot be null") @RequestParam("payType") Integer payType
     ) {
         orderService.mockPaySuccess(orderSn, payType);
         return Result.success();
@@ -120,5 +120,22 @@ public class OrderController {
     ) {
         orderService.mockRefund(orderSn);
         return Result.success();
+    }
+
+    /**
+     * Internal purchase eligibility check for review service.
+     *
+     * @param userId user ID
+     * @param orderSn order number
+     * @param skuId SKU ID
+     * @return true if the user has paid for the SKU
+     */
+    @GetMapping("/inner/check-purchase")
+    public Result<Boolean> checkPurchase(
+            @RequestParam("userId") @Min(1) Long userId,
+            @RequestParam("orderSn") @NotBlank String orderSn,
+            @RequestParam("skuId") @Min(1) Long skuId
+    ) {
+        return Result.success(orderService.checkPurchase(userId, orderSn, skuId));
     }
 }

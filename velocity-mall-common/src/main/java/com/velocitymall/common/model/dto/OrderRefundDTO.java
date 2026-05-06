@@ -3,6 +3,7 @@ package com.velocitymall.common.model.dto;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
@@ -11,7 +12,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderRefundDTO {
+@EqualsAndHashCode(callSuper = true)
+public class OrderRefundDTO extends BaseMessageDTO {
 
     private String orderSn;
 

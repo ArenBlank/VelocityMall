@@ -37,12 +37,12 @@ public class SearchController {
      */
     @GetMapping("/skus")
     public Result<PageVO<SearchSkuVO>> searchSkus(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(defaultValue = "sale_desc") String sort,
-            @RequestParam(defaultValue = "1")
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "sort", defaultValue = "sale_desc") String sort,
+            @RequestParam(value = "page", defaultValue = "1")
             @Min(value = 1, message = "page必须大于0")
             @Max(value = 100, message = "page不能大于100") Long page,
-            @RequestParam(defaultValue = "10")
+            @RequestParam(value = "size", defaultValue = "10")
             @Min(value = 1, message = "size必须大于0")
             @Max(value = 100, message = "size不能大于100") Long size
     ) {

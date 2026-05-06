@@ -1,6 +1,7 @@
 package com.velocitymall.product.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.model.dto.ProductSyncDTO;
 import com.velocitymall.common.result.ResultCode;
@@ -136,10 +137,14 @@ public class SpuServiceImpl implements SpuService {
     }
 
     private void sendProductSyncMessage(Long skuId, Integer action) {
+        ProductSyncDTO messageDTO = MqTraceContext.prepare(
+                new ProductSyncDTO(skuId, action),
+                String.valueOf(skuId)
+        );
         try {
             rocketMQTemplate.syncSendOrderly(
                     PRODUCT_SYNC_TOPIC,
-                    MessageBuilder.withPayload(new ProductSyncDTO(skuId, action)).build(),
+                    MessageBuilder.withPayload(messageDTO).build(),
                     String.valueOf(skuId)
             );
             log.info("Product SPU publish sync message sent. skuId: {}, action: {}", skuId, action);

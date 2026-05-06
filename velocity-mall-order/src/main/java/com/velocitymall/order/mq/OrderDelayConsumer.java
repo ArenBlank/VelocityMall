@@ -1,6 +1,7 @@
 package com.velocitymall.order.mq;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.common.result.ResultCode;
@@ -34,6 +35,10 @@ public class OrderDelayConsumer implements RocketMQListener<OrderMessageDTO> {
 
     @Override
     public void onMessage(OrderMessageDTO message) {
+        MqTraceContext.runWithTrace(message, () -> handleMessage(message));
+    }
+
+    private void handleMessage(OrderMessageDTO message) {
         log.info("收到订单延时关单消息, orderSn: {}", message.getOrderSn());
 
         Order order = orderMapper.selectOne(

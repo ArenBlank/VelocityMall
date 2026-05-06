@@ -20,6 +20,7 @@
         <module>velocity-mall-seckill</module>
         <module>velocity-mall-search</module>
         <module>velocity-mall-coupon</module>
+        <module>velocity-mall-review</module>
     </modules>
 
     <properties>
@@ -115,6 +116,7 @@
                     <version>${maven-compiler-plugin.version}</version>
                     <configuration>
                         <release>${java.version}</release>
+                        <parameters>true</parameters>
                         <encoding>${project.build.sourceEncoding}</encoding>
                     </configuration>
                 </plugin>

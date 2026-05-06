@@ -1,6 +1,7 @@
 package com.velocitymall.order.mq;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.model.dto.NormalOrderDelayDTO;
 import com.velocitymall.common.model.dto.StockLockDTO;
@@ -36,9 +37,12 @@ public class NormalOrderDelayConsumer implements RocketMQListener<NormalOrderDel
 
     @Override
     public void onMessage(NormalOrderDelayDTO message) {
+        MqTraceContext.runWithTrace(message, () -> handleMessage(message));
+    }
+
+    private void handleMessage(NormalOrderDelayDTO message) {
         validateMessage(message);
         log.info("Received normal order delay close message. orderSn: {}", message.getOrderSn());
-
         Order order = selectByOrderSn(message.getOrderSn());
         if (order == null) {
             log.warn("Normal order not found, discard delay message. orderSn: {}", message.getOrderSn());

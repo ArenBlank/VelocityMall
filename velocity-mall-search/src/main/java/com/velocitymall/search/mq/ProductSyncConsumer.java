@@ -1,5 +1,6 @@
 package com.velocitymall.search.mq;
 
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.model.dto.ProductSyncDTO;
 import com.velocitymall.search.service.SearchService;
 import lombok.RequiredArgsConstructor;
@@ -26,11 +27,13 @@ public class ProductSyncConsumer implements RocketMQListener<ProductSyncDTO> {
 
     @Override
     public void onMessage(ProductSyncDTO message) {
-        try {
-            searchService.syncProduct(message);
-        } catch (Exception exception) {
-            log.error("Product search sync failed, will retry. message: {}", message, exception);
-            throw new RuntimeException("Product search sync failed", exception);
-        }
+        MqTraceContext.runWithTrace(message, () -> {
+            try {
+                searchService.syncProduct(message);
+            } catch (Exception exception) {
+                log.error("Product search sync failed, will retry. message: {}", message, exception);
+                throw new RuntimeException("Product search sync failed", exception);
+            }
+        });
     }
 }

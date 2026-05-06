@@ -2,6 +2,7 @@ package com.velocitymall.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.context.UserContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.model.dto.NormalOrderDelayDTO;
@@ -225,6 +226,7 @@ public class OrderServiceImpl implements OrderService {
                 order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType(),
                 toOrderItemDTOList(orderItems)
         );
+        MqTraceContext.prepare(refundDTO, orderSn);
         registerRefundMessage(orderSn, refundDTO);
     }
 
@@ -313,7 +315,17 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
         int orderType = order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType();
         PaymentSuccessDTO paymentSuccessDTO = new PaymentSuccessDTO(orderSn, currentUserId, orderType, itemDTOList);
+        MqTraceContext.prepare(paymentSuccessDTO, orderSn);
         registerPaymentSuccessMessage(orderSn, paymentSuccessDTO);
+    }
+
+    @Override
+    public Boolean checkPurchase(Long userId, String orderSn, Long skuId) {
+        if (userId == null || userId <= 0 || !StringUtils.hasText(orderSn) || skuId == null || skuId <= 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "购买校验参数非法");
+        }
+        Long count = orderMapper.countPaidSkuOrders(userId, orderSn, skuId);
+        return count != null && count > 0;
     }
 
     private Order selectCurrentUserOrder(String orderSn) {
@@ -388,13 +400,17 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void registerImmediateNormalUnlockMessage(String orderSn, List<OrderItemDTO> itemDTOList) {
+        NormalOrderDelayDTO messageDTO = MqTraceContext.prepare(
+                new NormalOrderDelayDTO(orderSn, itemDTOList),
+                orderSn
+        );
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
                     rocketMQTemplate.syncSend(
                             NORMAL_ORDER_DELAY_TOPIC,
-                            MessageBuilder.withPayload(new NormalOrderDelayDTO(orderSn, itemDTOList)).build(),
+                            MessageBuilder.withPayload(messageDTO).build(),
                             SEND_TIMEOUT_MILLIS
                     );
                     log.info("Manual cancel normal order unlock message sent. orderSn: {}", orderSn);
@@ -413,6 +429,7 @@ public class OrderServiceImpl implements OrderService {
                 firstItem.getSkuQuantity(),
                 order.getOrderSn()
         );
+        MqTraceContext.prepare(messageDTO, order.getOrderSn());
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -532,13 +549,17 @@ public class OrderServiceImpl implements OrderService {
             Long userId,
             List<Long> checkedSkuIds
     ) {
+        NormalOrderDelayDTO messageDTO = MqTraceContext.prepare(
+                new NormalOrderDelayDTO(orderSn, items),
+                orderSn
+        );
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
                     rocketMQTemplate.syncSend(
                             NORMAL_ORDER_DELAY_TOPIC,
-                            MessageBuilder.withPayload(new NormalOrderDelayDTO(orderSn, items)).build(),
+                            MessageBuilder.withPayload(messageDTO).build(),
                             SEND_TIMEOUT_MILLIS,
                             DELAY_LEVEL_THIRTY_MINUTES
                     );
@@ -557,14 +578,15 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private void registerOrderDelayMessage(String orderSn, OrderItemDTO item) {
+        OrderMessageDTO messageDTO = new OrderMessageDTO();
+        messageDTO.setOrderSn(orderSn);
+        messageDTO.setSkuId(item.getSkuId());
+        messageDTO.setQuantity(item.getQuantity());
+        MqTraceContext.prepare(messageDTO, orderSn);
+
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                OrderMessageDTO messageDTO = new OrderMessageDTO();
-                messageDTO.setOrderSn(orderSn);
-                messageDTO.setSkuId(item.getSkuId());
-                messageDTO.setQuantity(item.getQuantity());
-
                 try {
                     rocketMQTemplate.syncSend(
                             ORDER_DELAY_TOPIC,

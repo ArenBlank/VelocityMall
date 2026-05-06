@@ -45,6 +45,10 @@ spring:
           uri: lb://velocity-mall-coupon
           predicates:
             - Path=/api/v1/coupons/**
+        - id: review-route
+          uri: lb://velocity-mall-review
+          predicates:
+            - Path=/api/v1/reviews/**
       discovery:
         locator:
           enabled: false

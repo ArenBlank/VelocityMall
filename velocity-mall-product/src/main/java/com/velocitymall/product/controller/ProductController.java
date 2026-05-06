@@ -88,9 +88,9 @@ public class ProductController {
      */
     @GetMapping("/inner/skus/search-source")
     public Result<PageVO<ProductSkuSearchDTO>> listPublishedSearchSources(
-            @RequestParam(defaultValue = "1")
+            @RequestParam(value = "page", defaultValue = "1")
             @Min(value = 1, message = "页码必须大于0") Long page,
-            @RequestParam(defaultValue = "500")
+            @RequestParam(value = "size", defaultValue = "500")
             @Min(value = 1, message = "每页数量必须大于0") Long size) {
         return Result.success(skuService.listPublishedSearchSources(page, size));
     }
