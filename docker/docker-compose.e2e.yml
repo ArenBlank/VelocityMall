@@ -27,10 +27,11 @@ services:
     container_name: velocity-e2e-nacos
     environment:
       MODE: standalone
-      JVM_XMS: 256m
-      JVM_XMX: 256m
-      JVM_XMN: 128m
-      JAVA_OPT: "-XX:-UseContainerSupport"
+      PREFER_HOST_MODE: hostname
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+      JAVA_OPT: "-XX:-UseContainerSupport -Dnacos.standalone=true"
       TZ: Asia/Shanghai
     ports:
       - "8848:8848"
