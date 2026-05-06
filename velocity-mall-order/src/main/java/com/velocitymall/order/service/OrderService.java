@@ -65,4 +65,14 @@ public interface OrderService {
      * @param payType payment type
      */
     void mockPaySuccess(String orderSn, Integer payType);
+
+    /**
+     * Check whether a user has paid for a SKU.
+     *
+     * @param userId user ID
+     * @param orderSn order number
+     * @param skuId SKU ID
+     * @return true if the user has a paid order containing the SKU
+     */
+    Boolean checkPurchase(Long userId, String orderSn, Long skuId);
 }

@@ -1,7 +1,9 @@
 package com.velocitymall.order.model.dto;
 
+import com.velocitymall.common.model.dto.BaseMessageDTO;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
@@ -10,7 +12,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderMessageDTO {
+@EqualsAndHashCode(callSuper = true)
+public class OrderMessageDTO extends BaseMessageDTO {
 
     private String orderSn;
 

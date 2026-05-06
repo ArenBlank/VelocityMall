@@ -1,6 +1,7 @@
 package com.velocitymall.order.mq;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.model.dto.SeckillRollbackDTO;
 import com.velocitymall.order.entity.Order;
@@ -38,6 +39,10 @@ public class SeckillDelayConsumer implements RocketMQListener<SeckillOrderDTO> {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void onMessage(SeckillOrderDTO message) {
+        MqTraceContext.runWithTrace(message, () -> handleMessage(message));
+    }
+
+    private void handleMessage(SeckillOrderDTO message) {
         log.info("Received seckill delay close message. orderSn: {}", message.getOrderSn());
         try {
             Order order = selectByOrderSn(message.getOrderSn());
@@ -100,6 +105,10 @@ public class SeckillDelayConsumer implements RocketMQListener<SeckillOrderDTO> {
 
     private void sendRollbackMessage(SeckillOrderDTO message) {
         SeckillRollbackDTO rollbackDTO = new SeckillRollbackDTO(message.getSkuId(), message.getUserId());
+        MqTraceContext.prepare(
+                rollbackDTO,
+                message.getBusinessId() == null ? message.getOrderSn() : message.getBusinessId()
+        );
         rocketMQTemplate.syncSend(
                 SECKILL_ROLLBACK_TOPIC,
                 MessageBuilder.withPayload(rollbackDTO).build(),

@@ -121,4 +121,21 @@ public class OrderController {
         orderService.mockRefund(orderSn);
         return Result.success();
     }
+
+    /**
+     * Internal purchase eligibility check for review service.
+     *
+     * @param userId user ID
+     * @param orderSn order number
+     * @param skuId SKU ID
+     * @return true if the user has paid for the SKU
+     */
+    @GetMapping("/inner/check-purchase")
+    public Result<Boolean> checkPurchase(
+            @RequestParam("userId") @Min(1) Long userId,
+            @RequestParam("orderSn") @NotBlank String orderSn,
+            @RequestParam("skuId") @Min(1) Long skuId
+    ) {
+        return Result.success(orderService.checkPurchase(userId, orderSn, skuId));
+    }
 }

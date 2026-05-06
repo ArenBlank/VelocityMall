@@ -1,5 +1,6 @@
 package com.velocitymall.seckill.mq;
 
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.model.dto.SeckillRollbackDTO;
 import com.velocitymall.seckill.service.SeckillService;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,10 @@ public class SeckillStockRollbackConsumer implements RocketMQListener<SeckillRol
 
     @Override
     public void onMessage(SeckillRollbackDTO message) {
+        MqTraceContext.runWithTrace(message, () -> handleMessage(message));
+    }
+
+    private void handleMessage(SeckillRollbackDTO message) {
         log.info("Received seckill stock rollback message. skuId: {}, userId: {}",
                 message.getSkuId(), message.getUserId());
         try {

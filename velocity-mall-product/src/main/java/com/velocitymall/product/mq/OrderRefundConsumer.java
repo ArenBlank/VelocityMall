@@ -1,5 +1,6 @@
 package com.velocitymall.product.mq;
 
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.model.dto.OrderRefundDTO;
 import com.velocitymall.product.service.SkuService;
 import lombok.RequiredArgsConstructor;
@@ -21,14 +22,16 @@ public class OrderRefundConsumer implements RocketMQListener<OrderRefundDTO> {
 
     @Override
     public void onMessage(OrderRefundDTO message) {
-        String orderSn = message == null ? null : message.getOrderSn();
-        try {
-            log.info("Received order refund message. orderSn: {}", orderSn);
-            skuService.refundPhysicalStock(message);
-            log.info("Order refund message consumed. orderSn: {}", orderSn);
-        } catch (Exception exception) {
-            log.error("Order refund message consume failed. orderSn: {}", orderSn, exception);
-            throw new RuntimeException("Order refund message consume failed", exception);
-        }
+        MqTraceContext.runWithTrace(message, () -> {
+            String orderSn = message == null ? null : message.getOrderSn();
+            try {
+                log.info("Received order refund message. orderSn: {}", orderSn);
+                skuService.refundPhysicalStock(message);
+                log.info("Order refund message consumed. orderSn: {}", orderSn);
+            } catch (Exception exception) {
+                log.error("Order refund message consume failed. orderSn: {}", orderSn, exception);
+                throw new RuntimeException("Order refund message consume failed", exception);
+            }
+        });
     }
 }

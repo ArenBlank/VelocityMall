@@ -1,6 +1,7 @@
 package com.velocitymall.seckill.service.impl;
 
 import com.velocitymall.common.context.UserContext;
+import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.result.ResultCode;
@@ -117,6 +118,7 @@ public class SeckillServiceImpl implements SeckillService {
 
         String orderSn = generateSeckillOrderSn();
         SeckillOrderDTO messageDTO = new SeckillOrderDTO(userId, skuId, DEFAULT_QUANTITY, orderSn);
+        MqTraceContext.prepare(messageDTO, orderSn);
         sendSeckillOrderMessage(messageDTO, stockKey, boughtKey, userIdValue, quantityValue);
         return "秒杀成功，正在排队中...";
     }

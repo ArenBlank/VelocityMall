@@ -2,6 +2,7 @@ package com.velocitymall.common.model.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
@@ -10,7 +11,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class SeckillOrderDTO {
+@EqualsAndHashCode(callSuper = true)
+public class SeckillOrderDTO extends BaseMessageDTO {
 
     private Long userId;
 

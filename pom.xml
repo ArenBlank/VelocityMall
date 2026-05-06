@@ -20,6 +20,7 @@
         <module>velocity-mall-seckill</module>
         <module>velocity-mall-search</module>
         <module>velocity-mall-coupon</module>
+        <module>velocity-mall-review</module>
     </modules>
 
     <properties>

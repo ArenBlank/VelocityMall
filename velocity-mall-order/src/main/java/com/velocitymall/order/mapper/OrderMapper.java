@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.velocitymall.order.entity.Order;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 /**
@@ -75,4 +76,29 @@ public interface OrderMapper extends BaseMapper<Order> {
               AND is_deleted = 0
             """)
     int markPaid(@Param("orderSn") String orderSn, @Param("payType") Integer payType);
+
+    /**
+     * Count paid orders containing the specified SKU for a user.
+     *
+     * @param userId user ID
+     * @param orderSn order number
+     * @param skuId SKU ID
+     * @return matching order count
+     */
+    @Select("""
+            SELECT COUNT(1)
+            FROM oms_order o
+            INNER JOIN oms_order_item oi ON o.order_sn = oi.order_sn
+            WHERE o.user_id = #{userId}
+              AND o.order_sn = #{orderSn}
+              AND oi.sku_id = #{skuId}
+              AND o.status = 1
+              AND o.is_deleted = 0
+              AND oi.is_deleted = 0
+            """)
+    Long countPaidSkuOrders(
+            @Param("userId") Long userId,
+            @Param("orderSn") String orderSn,
+            @Param("skuId") Long skuId
+    );
 }

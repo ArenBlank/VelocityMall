@@ -43,12 +43,14 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/products/spus/**",
             "/api/v1/products/skus/*",
             "/api/v1/search/**",
-            "/api/v1/categories/tree"
+            "/api/v1/categories/tree",
+            "/api/v1/reviews/products/**"
     };
 
     private static final String[] BLACK_LIST = {
             "/api/v1/products/inner/**",
             "/api/v1/search/inner/**",
+            "/api/v1/orders/inner/**",
             "/api/v1/products/skus/lock-stock",
             "/api/v1/products/skus/unlock-stock"
     };
@@ -71,7 +73,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
 
         if (isWhiteRequest(request, path)) {
-            return chain.filter(exchange);
+            return optionalAuthFilter(exchange, chain, request);
         }
 
         String token = request.getHeaders().getFirst(AUTHORIZATION_HEADER);
@@ -79,6 +81,33 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "缺少身份凭证");
         }
 
+        return authenticatedFilter(exchange, chain, request, token);
+    }
+
+    private Mono<Void> optionalAuthFilter(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            ServerHttpRequest request
+    ) {
+        String token = request.getHeaders().getFirst(AUTHORIZATION_HEADER);
+        if (!StringUtils.hasText(token)) {
+            ServerHttpRequest anonymousRequest = request.mutate()
+                    .headers(headers -> headers.remove(USER_ID_HEADER))
+                    .build();
+            return chain.filter(exchange.mutate().request(anonymousRequest).build());
+        }
+        if (!token.startsWith(BEARER_PREFIX)) {
+            return errorResponse(exchange, HttpStatus.UNAUTHORIZED, 40100, "凭证无效");
+        }
+        return authenticatedFilter(exchange, chain, request, token);
+    }
+
+    private Mono<Void> authenticatedFilter(
+            ServerWebExchange exchange,
+            GatewayFilterChain chain,
+            ServerHttpRequest request,
+            String token
+    ) {
         try {
             Claims claims = parseClaims(token.substring(BEARER_PREFIX.length()));
             String userId = String.valueOf(claims.get("userId"));
@@ -126,7 +155,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         if (pathMatcher.match(WHITE_LIST[2], path)) {
             return true;
         }
-        return pathMatcher.match(WHITE_LIST[3], path);
+        if (pathMatcher.match(WHITE_LIST[3], path)) {
+            return true;
+        }
+        return pathMatcher.match(WHITE_LIST[4], path);
     }
 
     private boolean isNumericSkuPath(String path) {
