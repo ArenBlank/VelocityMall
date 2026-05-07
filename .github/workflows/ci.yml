@@ -170,31 +170,69 @@ jobs:
 
       - name: Start Services (Gateway + User + Product + Seckill)
         run: |
+          pids=()
           for svc in product seckill gateway user; do
             jar=$(find velocity-mall-${svc}/target -maxdepth 1 -name "*.jar" ! -name "*sources*" ! -name "*javadoc*" | head -1)
             java -Xms128m -Xmx256m -jar "$jar" > /tmp/${svc}.log 2>&1 &
-            echo "Started $svc PID $!"
+            pids+=($!)
+            echo "Started $svc PID ${pids[-1]}"
           done
-          # TCP port check — avoids HTTP 404 on gateway root path
+          # TCP port check — fail if any port never opens
           for port in 8080 8081 8083 8088; do
+            port_ok=false
             for i in $(seq 1 60); do
               if (echo > /dev/tcp/127.0.0.1/${port}) >/dev/null 2>&1; then
-                echo "Port ${port} ready"; break
+                echo "Port ${port} ready (attempt $i)"; port_ok=true; break
               fi
               sleep 2
             done
+            if [[ "$port_ok" != "true" ]]; then
+              echo "ERROR: Port ${port} never opened. Dumping stderr:"
+              case ${port} in
+                8080) svc=gateway ;; 8081) svc=product ;; 8083) svc=seckill ;; 8088) svc=user ;;
+              esac
+              tail -50 /tmp/${svc}.log 2>/dev/null || true
+              exit 1
+            fi
           done
-          # Wait for Nacos service registration
+          # Wait for Nacos service registration — fail if any service never registers
           for svc in velocity-mall-gateway velocity-mall-product velocity-mall-user velocity-mall-seckill; do
+            nacos_ok=false
             for i in $(seq 1 30); do
               if curl -fsS "http://127.0.0.1:8848/nacos/v1/ns/instance/list?serviceName=${svc}" 2>/dev/null | python3 -c 'import json,sys; payload=json.load(sys.stdin); hosts=payload.get("hosts") or []; sys.exit(0 if any(h.get("healthy") for h in hosts) else 1)' >/dev/null 2>&1; then
-                echo "Nacos ${svc} healthy"; break
+                echo "Nacos ${svc} healthy (attempt $i)"; nacos_ok=true; break
               fi
               sleep 2
             done
+            if [[ "$nacos_ok" != "true" ]]; then
+              echo "ERROR: Nacos ${svc} never registered as healthy"
+              exit 1
+            fi
+          done
+          # Verify JVM processes still alive
+          for pid in ${pids[*]}; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "ERROR: JVM process PID $pid died"
+              exit 1
+            fi
           done
           sleep 5
           echo "All services up"
+
+      - name: Register e2euser
+        run: |
+          for i in $(seq 1 15); do
+            resp=$(curl -sS -X POST http://127.0.0.1:8080/api/v1/users/register \
+              -H "Content-Type: application/json" \
+              -d '{"username":"e2euser","password":"e2epass123"}' 2>/dev/null || true)
+            echo "Register attempt $i: $resp"
+            if echo "$resp" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("code") in (20000,50001) else 1)' 2>/dev/null; then
+              echo "e2euser ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Failed to register e2euser"
+          exit 1
 
       - name: Install k6
         run: |
