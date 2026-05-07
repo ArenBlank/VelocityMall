@@ -1,0 +1,107 @@
+name: velocity-mall-cluster
+
+# ============================================================
+# 中间件集群 Compose — 仅中间件 + Nginx
+# Java 微服务全部在宿主机运行（直连 127.0.0.1）
+# ============================================================
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cluster-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: velocity_mall
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ../doc/sql:/docker-entrypoint-initdb.d
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --max_connections=1000
+    networks:
+      - cluster-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: cluster-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxclients 10000
+    networks:
+      - cluster-net
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: cluster-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      TZ: Asia/Shanghai
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    networks:
+      - cluster-net
+
+  rmqnamesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: cluster-rmqnamesrv
+    restart: unless-stopped
+    environment:
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
+      TZ: Asia/Shanghai
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+    networks:
+      - cluster-net
+
+  rmqbroker:
+    image: apache/rocketmq:4.9.4
+    container_name: cluster-rmqbroker
+    restart: unless-stopped
+    depends_on:
+      - rmqnamesrv
+    environment:
+      NAMESRV_ADDR: rmqnamesrv:9876
+      JAVA_OPT_EXT: "-server -Xms256m -Xmx256m -Xmn128m"
+      TZ: Asia/Shanghai
+    ports:
+      - "10911:10911"
+      - "10909:10909"
+    command:
+      - sh
+      - -c
+      - |
+        printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=rmqnamesrv:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+        sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    networks:
+      - cluster-net
+
+  nginx:
+    image: nginx:1.24-alpine
+    container_name: cluster-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - cluster-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  cluster-net:
+    driver: bridge

@@ -9,7 +9,7 @@ import urllib.error
 
 BASE = "http://127.0.0.1:8080/api/v1/users"
 PASSWORD = "test123"
-TOTAL = 200
+TOTAL = 2000
 RETRY_MAX = 30
 RETRY_DELAY = 2
 
@@ -57,7 +57,7 @@ for i in range(1, RETRY_MAX + 1):
     time.sleep(RETRY_DELAY)
 
 for i in range(1, TOTAL + 1):
-    username = f"loaduser_{i}"
+    username = f"lt_u_{i}"
     user_data = {"username": username, "password": PASSWORD}
 
     # Register
@@ -84,7 +84,7 @@ for i in range(1, TOTAL + 1):
 
     time.sleep(0.02)
 
-output_path = "scripts/performance/users.json"
+output_path = "scripts/performance/extreme_users.json"
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(users, f, ensure_ascii=False)
 

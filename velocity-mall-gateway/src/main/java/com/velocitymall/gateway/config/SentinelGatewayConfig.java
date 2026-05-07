@@ -45,7 +45,8 @@ public class SentinelGatewayConfig {
 
     private static final String SECKILL_SKU_FIELD_NAME = "skuId";
 
-    private static final double SECKILL_QPS_LIMIT = 5.0D;
+    private static final double SECKILL_QPS_LIMIT =
+            Double.parseDouble(System.getenv().getOrDefault("SECKILL_QPS_LIMIT", "5.0"));
 
     private static final long INTERVAL_SECONDS = 1L;
 
