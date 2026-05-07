@@ -135,9 +135,20 @@ jobs:
             fi
             sleep 2
           done
-          # Extra wait for gRPC channel to fully establish
-          sleep 10
-          echo "Nacos gRPC should be ready"
+          # Wait for gRPC port — readiness endpoint returns OK before gRPC is listening
+          grpc_ok=false
+          for i in $(seq 1 60); do
+            if (echo > /dev/tcp/127.0.0.1/9848) >/dev/null 2>&1; then
+              echo "Nacos gRPC ready (attempt $i)"; grpc_ok=true; break
+            fi
+            sleep 2
+          done
+          if [[ "$grpc_ok" != "true" ]]; then
+            echo "ERROR: Nacos gRPC port 9848 never opened"
+            exit 1
+          fi
+          sleep 5
+          echo "Nacos fully ready"
 
       - name: Start RocketMQ
         run: |
