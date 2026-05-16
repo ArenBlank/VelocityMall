@@ -5,6 +5,8 @@ import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.exception.BusinessException;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.result.ResultCode;
+import com.velocitymall.seckill.entity.SeckillActivity;
+import com.velocitymall.seckill.service.SeckillActivityService;
 import com.velocitymall.seckill.service.SeckillService;
 import java.util.List;
 import java.util.UUID;
@@ -83,6 +85,8 @@ public class SeckillServiceImpl implements SeckillService {
 
     private final RocketMQTemplate rocketMQTemplate;
 
+    private final SeckillActivityService seckillActivityService;
+
     @Override
     public String execute(Long skuId) {
         if (skuId == null || skuId <= 0) {
@@ -94,6 +98,7 @@ public class SeckillServiceImpl implements SeckillService {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户未登录");
         }
 
+        SeckillActivity activity = seckillActivityService.requireActiveActivity(skuId);
         String stockKey = STOCK_KEY_PREFIX + skuId;
         String boughtKey = BOUGHT_KEY_PREFIX + skuId;
         String userIdValue = String.valueOf(userId);
@@ -117,7 +122,13 @@ public class SeckillServiceImpl implements SeckillService {
         }
 
         String orderSn = generateSeckillOrderSn();
-        SeckillOrderDTO messageDTO = new SeckillOrderDTO(userId, skuId, DEFAULT_QUANTITY, orderSn);
+        SeckillOrderDTO messageDTO = new SeckillOrderDTO(
+                userId,
+                skuId,
+                DEFAULT_QUANTITY,
+                orderSn,
+                activity.getSeckillPrice()
+        );
         MqTraceContext.prepare(messageDTO, orderSn);
         sendSeckillOrderMessage(messageDTO, stockKey, boughtKey, userIdValue, quantityValue);
         return "秒杀成功，正在排队中...";

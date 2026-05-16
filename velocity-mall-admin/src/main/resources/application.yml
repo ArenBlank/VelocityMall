@@ -18,10 +18,22 @@ spring:
       host: 127.0.0.1
       port: 6379
       database: 0
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
 
 jwt:
   secret: 7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D7A2B4C6D8E0F1A3B5C7D9E2F4A6B8C0D
   expiration: 604800000
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+  public-endpoint: ${MINIO_PUBLIC_ENDPOINT:/minio}
+  access-key: ${MINIO_ACCESS_KEY:root}
+  secret-key: ${MINIO_SECRET_KEY:rootroot}
+  bucket-name: ${MINIO_BUCKET_NAME:velocity-mall-product}
+  max-file-size: ${MINIO_MAX_FILE_SIZE:5242880}
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml

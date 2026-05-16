@@ -32,4 +32,10 @@ public class CouponHistory extends BaseEntity {
 
     @TableField("use_status")
     private Integer useStatus;
+
+    @TableField("use_time")
+    private LocalDateTime useTime;
+
+    @TableField("order_sn")
+    private String orderSn;
 }

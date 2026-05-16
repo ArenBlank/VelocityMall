@@ -3,6 +3,7 @@ package com.velocitymall.order.service;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.model.vo.OrderDetailVO;
 import com.velocitymall.common.model.vo.PageVO;
+import com.velocitymall.common.model.vo.SeckillResultVO;
 import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.vo.OrderVO;
 
@@ -36,6 +37,14 @@ public interface OrderService {
      * @return order detail
      */
     OrderDetailVO getOrderDetail(String orderSn);
+
+    /**
+     * Query current user's seckill order generation result by SKU.
+     *
+     * @param skuId SKU ID
+     * @return processing, success, or failed result
+     */
+    SeckillResultVO getSeckillResult(Long skuId);
 
     /**
      * Cancel a waiting-pay order.

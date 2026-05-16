@@ -1,5 +1,6 @@
 package com.velocitymall.common.model.dto;
 
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -21,4 +22,10 @@ public class SeckillOrderDTO extends BaseMessageDTO {
     private Integer quantity;
 
     private String orderSn;
+
+    private BigDecimal seckillPrice;
+
+    public SeckillOrderDTO(Long userId, Long skuId, Integer quantity, String orderSn) {
+        this(userId, skuId, quantity, orderSn, null);
+    }
 }

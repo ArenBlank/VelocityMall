@@ -5,17 +5,21 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.context.UserContext;
 import com.velocitymall.common.exception.BusinessException;
+import com.velocitymall.common.model.dto.CouponUseDTO;
 import com.velocitymall.common.model.dto.NormalOrderDelayDTO;
 import com.velocitymall.common.model.dto.OrderItemDTO;
 import com.velocitymall.common.model.dto.OrderRefundDTO;
 import com.velocitymall.common.model.dto.PaymentSuccessDTO;
 import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.model.dto.StockLockDTO;
+import com.velocitymall.common.model.vo.CouponUseVO;
 import com.velocitymall.common.model.vo.OrderDetailVO;
 import com.velocitymall.common.model.vo.OrderItemVO;
 import com.velocitymall.common.model.vo.PageVO;
+import com.velocitymall.common.model.vo.SeckillResultVO;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.common.result.ResultCode;
+import com.velocitymall.order.client.CouponFeignClient;
 import com.velocitymall.order.client.ProductFeignClient;
 import com.velocitymall.order.client.UserFeignClient;
 import com.velocitymall.order.entity.Order;
@@ -100,6 +104,8 @@ public class OrderServiceImpl implements OrderService {
 
     private final ProductFeignClient productFeignClient;
 
+    private final CouponFeignClient couponFeignClient;
+
     private final UserFeignClient userFeignClient;
 
     private final OrderMapper orderMapper;
@@ -123,12 +129,15 @@ public class OrderServiceImpl implements OrderService {
         UserAddressVO addressSnapshot = fetchAddressSnapshot(dto.getAddressId(), currentUserId);
 
         lockPhysicalStockOrCompensate(orderSn, checkedItems);
+        CouponUseVO couponUsage = null;
         try {
+            couponUsage = useCouponIfPresent(dto, currentUserId, orderSn, totalAmount);
+            BigDecimal payAmount = couponUsage == null ? totalAmount : couponUsage.getPayAmount();
             Order order = Order.builder()
                     .orderSn(orderSn)
                     .userId(currentUserId)
                     .totalAmount(totalAmount)
-                    .payAmount(totalAmount)
+                    .payAmount(payAmount)
                     .orderType(ORDER_TYPE_NORMAL)
                     .status(ORDER_STATUS_WAIT_PAY)
                     .receiverName(addressSnapshot.getReceiverName())
@@ -167,7 +176,13 @@ public class OrderServiceImpl implements OrderService {
                     .status(order.getStatus())
                     .build();
         } catch (Exception exception) {
+            if (couponUsage != null) {
+                releaseCouponIfPresent(orderSn);
+            }
             compensateUnlockPhysicalStock(orderSn, checkedItems, exception);
+            if (exception instanceof BusinessException businessException) {
+                throw businessException;
+            }
             throw new BusinessException(ResultCode.SYSTEM_ERROR, "下单失败，请稍后重试");
         }
     }
@@ -211,6 +226,23 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public SeckillResultVO getSeckillResult(Long skuId) {
+        if (skuId == null || skuId <= 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "skuId must be greater than 0");
+        }
+        Order order = orderMapper.selectLatestSeckillOrderBySkuId(getCurrentUserId(), skuId);
+        if (order == null) {
+            return new SeckillResultVO("PROCESSING", null, null, "订单生成中，请稍候");
+        }
+        Integer status = order.getStatus();
+        if (Integer.valueOf(ORDER_STATUS_CLOSED).equals(status)
+                || Integer.valueOf(ORDER_STATUS_REFUNDED).equals(status)) {
+            return new SeckillResultVO("FAILED", order.getOrderSn(), status, "订单已关闭或已退款");
+        }
+        return new SeckillResultVO("SUCCESS", order.getOrderSn(), status, "订单已生成，请尽快支付");
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(String orderSn) {
         Order order = selectCurrentUserOrder(orderSn);
@@ -222,6 +254,7 @@ public class OrderServiceImpl implements OrderService {
         if (affectedRows == 0) {
             throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，取消失败");
         }
+        releaseCouponIfPresent(orderSn);
         registerCancelCompensationMessage(order, orderItems);
     }
 
@@ -260,7 +293,10 @@ public class OrderServiceImpl implements OrderService {
         }
 
         SkuVO skuSnapshot = getSkuSnapshot(dto.getSkuId());
-        BigDecimal skuPrice = skuSnapshot.getPrice() == null ? DEFAULT_AMOUNT : skuSnapshot.getPrice();
+        BigDecimal skuPrice = dto.getSeckillPrice() == null ? skuSnapshot.getPrice() : dto.getSeckillPrice();
+        if (skuPrice == null) {
+            skuPrice = DEFAULT_AMOUNT;
+        }
         BigDecimal totalAmount = skuPrice.multiply(BigDecimal.valueOf(dto.getQuantity()));
 
         Order order = Order.builder()
@@ -344,6 +380,36 @@ public class OrderServiceImpl implements OrderService {
         return count != null && count > 0;
     }
 
+    private CouponUseVO useCouponIfPresent(SubmitOrderDTO dto, Long userId, String orderSn, BigDecimal totalAmount) {
+        if (dto.getCouponHistoryId() == null) {
+            return null;
+        }
+        Result<CouponUseVO> result = couponFeignClient.useCoupon(
+                new CouponUseDTO(userId, dto.getCouponHistoryId(), orderSn, totalAmount)
+        );
+        if (result == null || !ResultCode.SUCCESS.getCode().equals(result.getCode()) || result.getData() == null) {
+            String message = result == null || !StringUtils.hasText(result.getMessage())
+                    ? "Coupon service did not return a valid settlement result"
+                    : result.getMessage();
+            throw new BusinessException(ResultCode.BIZ_WARNING, message);
+        }
+        return result.getData();
+    }
+
+    private void releaseCouponIfPresent(String orderSn) {
+        try {
+            Result<Void> result = couponFeignClient.releaseCoupon(orderSn);
+            if (result == null || !ResultCode.SUCCESS.getCode().equals(result.getCode())) {
+                String message = result == null || !StringUtils.hasText(result.getMessage())
+                        ? "Coupon service no response"
+                        : result.getMessage();
+                log.warn("Release coupon returned failure. orderSn: {}, message: {}", orderSn, message);
+            }
+        } catch (Exception exception) {
+            log.warn("Release coupon failed. orderSn: {}", orderSn, exception);
+        }
+    }
+
     private Order selectCurrentUserOrder(String orderSn) {
         if (!StringUtils.hasText(orderSn)) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "订单号不能为空");
@@ -386,6 +452,7 @@ public class OrderServiceImpl implements OrderService {
         return new OrderDetailVO(
                 order.getOrderSn(),
                 order.getTotalAmount(),
+                order.getPayAmount(),
                 order.getPayType(),
                 order.getStatus(),
                 order.getOrderType(),

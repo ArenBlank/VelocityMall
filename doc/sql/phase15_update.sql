@@ -34,9 +34,12 @@ CREATE TABLE IF NOT EXISTS `sms_coupon_history` (
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `is_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
+    `use_time` DATETIME NULL COMMENT 'coupon use time',
+    `order_sn` VARCHAR(64) NULL COMMENT 'coupon order number',
     PRIMARY KEY (`id`),
     KEY `idx_coupon_user` (`coupon_id`, `user_id`),
-    KEY `idx_user_status` (`user_id`, `use_status`)
+    KEY `idx_user_status` (`user_id`, `use_status`),
+    KEY `idx_order_sn` (`order_sn`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci

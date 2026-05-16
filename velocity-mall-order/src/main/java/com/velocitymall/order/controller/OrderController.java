@@ -3,6 +3,7 @@ package com.velocitymall.order.controller;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.common.model.vo.OrderDetailVO;
 import com.velocitymall.common.model.vo.PageVO;
+import com.velocitymall.common.model.vo.SeckillResultVO;
 import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.vo.OrderVO;
 import com.velocitymall.order.service.OrderService;
@@ -74,6 +75,20 @@ public class OrderController {
             @PathVariable("order-sn") String orderSn
     ) {
         return Result.success(orderService.getOrderDetail(orderSn));
+    }
+
+    /**
+     * Poll current user's flash-sale order result by SKU.
+     *
+     * @param skuId SKU ID
+     * @return processing, success, or failed result
+     */
+    @GetMapping("/seckill/result/{skuId}")
+    public Result<SeckillResultVO> getSeckillResult(
+            @Min(value = 1, message = "skuId must be greater than 0")
+            @PathVariable("skuId") Long skuId
+    ) {
+        return Result.success(orderService.getSeckillResult(skuId));
     }
 
     /**

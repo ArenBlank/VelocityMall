@@ -22,4 +22,7 @@ public class SubmitOrderDTO {
     @NotNull(message = "收货地址ID不能为空")
     @Min(value = 1, message = "收货地址ID必须大于0")
     private Long addressId;
+
+    @Min(value = 1, message = "couponHistoryId must be greater than 0")
+    private Long couponHistoryId;
 }

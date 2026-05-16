@@ -20,10 +20,17 @@ spring:
       database: 0
 
 minio:
-  endpoint: http://127.0.0.1:9000
-  access-key: root
-  secret-key: rootroot
-  bucket-name: velocity-mall-product
+  endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+  access-key: ${MINIO_ACCESS_KEY:root}
+  secret-key: ${MINIO_SECRET_KEY:rootroot}
+  bucket-name: ${MINIO_BUCKET_NAME:velocity-mall-product}
+
+product:
+  cover-fallback:
+    urls:
+      - ${PRODUCT_COVER_FALLBACK_1:/minio/velocity-mall-product/products/default-covers/phone-1.png}
+      - ${PRODUCT_COVER_FALLBACK_2:/minio/velocity-mall-product/products/default-covers/phone-2.png}
+      - ${PRODUCT_COVER_FALLBACK_3:/minio/velocity-mall-product/products/default-covers/phone-3.png}
 
 rocketmq:
   name-server: 127.0.0.1:9876

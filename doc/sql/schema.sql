@@ -68,6 +68,30 @@ CREATE TABLE `pms_sku`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='商品SKU表';
 
+DROP TABLE IF EXISTS `sms_seckill_activity`;
+CREATE TABLE `sms_seckill_activity`
+(
+    `id`             BIGINT         NOT NULL COMMENT '秒杀活动ID',
+    `sku_id`         BIGINT         NOT NULL COMMENT 'SKU ID',
+    `spu_id`         BIGINT         NOT NULL COMMENT 'SPU ID',
+    `activity_name`  VARCHAR(128)   NOT NULL COMMENT '活动名称',
+    `seckill_price`  DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '秒杀价',
+    `original_price` DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '原价快照',
+    `seckill_stock`  INT            NOT NULL DEFAULT 0 COMMENT '秒杀活动库存',
+    `start_time`     DATETIME       NOT NULL COMMENT '活动开始时间',
+    `end_time`       DATETIME       NOT NULL COMMENT '活动结束时间',
+    `status`         TINYINT        NOT NULL DEFAULT 1 COMMENT '状态，0-禁用，1-启用',
+    `version`        INT            NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    `create_time`    DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`    DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_deleted`     TINYINT        NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_sku_status_time` (`sku_id`, `status`, `start_time`, `end_time`),
+    KEY `idx_status_time` (`status`, `start_time`, `end_time`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci COMMENT ='秒杀活动表';
+
 DROP TABLE IF EXISTS `oms_order`;
 CREATE TABLE `oms_order`
 (
@@ -199,9 +223,12 @@ CREATE TABLE `sms_coupon_history`
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `is_deleted`  TINYINT  NOT NULL DEFAULT 0 COMMENT '逻辑删除标记，0-未删除，1-已删除',
+    `use_time`    DATETIME NULL COMMENT 'coupon use time',
+    `order_sn`    VARCHAR(64) NULL COMMENT 'coupon order number',
     PRIMARY KEY (`id`),
     KEY `idx_coupon_user` (`coupon_id`, `user_id`),
-    KEY `idx_user_status` (`user_id`, `use_status`)
+    KEY `idx_user_status` (`user_id`, `use_status`),
+    KEY `idx_order_sn` (`order_sn`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci COMMENT ='优惠券领取记录表';

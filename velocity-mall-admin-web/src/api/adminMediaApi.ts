@@ -1,0 +1,1 @@
+export { uploadAdminSkuCover } from './adminProductApi';

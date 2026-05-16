@@ -128,4 +128,28 @@ public interface OrderMapper extends BaseMapper<Order> {
             @Param("orderSn") String orderSn,
             @Param("skuId") Long skuId
     );
+
+    /**
+     * Query latest seckill order for current user and SKU.
+     *
+     * @param userId user ID
+     * @param skuId SKU ID
+     * @return latest seckill order, or null when MQ persistence is still processing
+     */
+    @Select("""
+            SELECT o.*
+            FROM oms_order o
+            INNER JOIN oms_order_item oi ON o.order_sn = oi.order_sn
+            WHERE o.user_id = #{userId}
+              AND o.order_type = 1
+              AND oi.sku_id = #{skuId}
+              AND o.is_deleted = 0
+              AND oi.is_deleted = 0
+            ORDER BY o.create_time DESC
+            LIMIT 1
+            """)
+    Order selectLatestSeckillOrderBySkuId(
+            @Param("userId") Long userId,
+            @Param("skuId") Long skuId
+    );
 }

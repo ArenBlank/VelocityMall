@@ -1,5 +1,8 @@
 package com.velocitymall.seckill.task;
 
+import com.velocitymall.seckill.entity.SeckillActivity;
+import com.velocitymall.seckill.service.SeckillActivityService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -16,24 +19,33 @@ public class SeckillSkuScheduledTask {
 
     public static final String SECKILL_STOCK_PREFIX = "velocitymall:seckill:stock:";
 
-    private static final Long TEST_SKU_ID = 2001L;
-
-    private static final int TEST_STOCK = 50;
-
     private final StringRedisTemplate stringRedisTemplate;
 
+    private final SeckillActivityService seckillActivityService;
+
     /**
-     * Local test preheat runs every minute. Production should preheat before the activity starts.
+     * Local preheat runs every minute. Activity stock comes from sms_seckill_activity.
      */
     @Scheduled(cron = "0 * * * * ?")
     public void preheatSeckillStock() {
-        String stockKey = SECKILL_STOCK_PREFIX + TEST_SKU_ID;
-        Boolean initialized = stringRedisTemplate.opsForValue().setIfAbsent(stockKey, String.valueOf(TEST_STOCK));
-        if (Boolean.TRUE.equals(initialized)) {
-            log.info("预热秒杀库存成功. skuId: {}, stock: {}", TEST_SKU_ID, TEST_STOCK);
+        List<SeckillActivity> activities = seckillActivityService.listPreheatActivities();
+        if (activities.isEmpty()) {
+            log.info("No active seckill activity needs preheating.");
             return;
         }
-        String currentStock = stringRedisTemplate.opsForValue().get(stockKey);
-        log.info("秒杀库存已存在，跳过重复预热. skuId: {}, currentStock: {}", TEST_SKU_ID, currentStock);
+
+        for (SeckillActivity activity : activities) {
+            String stockKey = SECKILL_STOCK_PREFIX + activity.getSkuId();
+            Boolean initialized = stringRedisTemplate.opsForValue()
+                    .setIfAbsent(stockKey, String.valueOf(activity.getSeckillStock()));
+            if (Boolean.TRUE.equals(initialized)) {
+                log.info("Seckill stock preheated. skuId: {}, stock: {}",
+                        activity.getSkuId(), activity.getSeckillStock());
+                continue;
+            }
+            String currentStock = stringRedisTemplate.opsForValue().get(stockKey);
+            log.info("Seckill stock already exists, skip duplicate preheat. skuId: {}, currentStock: {}",
+                    activity.getSkuId(), currentStock);
+        }
     }
 }

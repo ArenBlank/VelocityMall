@@ -220,12 +220,30 @@ public class SearchServiceImpl implements SearchService {
                     """;
         }
         try {
+            String trimmedKeyword = keyword.trim();
             String escapedKeyword = objectMapper.writeValueAsString(keyword);
+            if (trimmedKeyword.matches("\\d+")) {
+                Long skuId = Long.valueOf(trimmedKeyword);
+                return """
+                        {
+                          "bool": {
+                            "should": [
+                              {"term": {"skuId": %d}},
+                              {"match_phrase": {"skuName": %s}}
+                            ],
+                            "minimum_should_match": 1,
+                            "filter": [
+                              {"term": {"status": 1}}
+                            ]
+                          }
+                        }
+                        """.formatted(skuId, escapedKeyword);
+            }
             return """
                     {
                       "bool": {
                         "must": [
-                          {"match": {"skuName": %s}}
+                          {"match_phrase": {"skuName": %s}}
                         ],
                         "filter": [
                           {"term": {"status": 1}}

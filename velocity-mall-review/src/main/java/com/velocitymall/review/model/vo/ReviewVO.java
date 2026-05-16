@@ -35,5 +35,7 @@ public class ReviewVO {
 
     private Integer currentInteractionType;
 
+    private Boolean mine;
+
     private LocalDateTime createTime;
 }

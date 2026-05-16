@@ -1,103 +1,144 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
-## Build & Run
+## Source Of Truth
+
+When Markdown docs conflict with implementation, trust the current code first:
+
+- Root `pom.xml` for module list and dependency versions.
+- Each module's `application.yml` for service names, ports, middleware addresses, and gateway routes.
+- Controllers and Feign clients for API surface.
+- `scripts/ci/e2e.sh` for the currently verified full-chain behavior.
+- `doc/sql/` for schema phases and seeded tables.
+
+## Build And Run
 
 ```bash
-# 构建所有模块
-mvn clean install -DskipTests
+# Build all modules
+mvn clean package -DskipTests
 
-# 构建单个模块
-mvn clean install -pl velocity-mall-common -DskipTests
+# Build one module and its dependencies
+mvn clean package -pl velocity-mall-order -am -DskipTests
 
-# 运行单个服务（在对应模块目录下）
+# Run one service from the repository root
 mvn spring-boot:run -pl velocity-mall-gateway
 
-# 或直接运行 JAR
+# Run a packaged service
 java -jar velocity-mall-gateway/target/velocity-mall-gateway-1.0.0-SNAPSHOT.jar
+
+# Full-chain E2E
+bash scripts/ci/e2e.sh
 ```
 
-所有 bootable 模块（除 `velocity-mall-common` 外）都包含 `spring-boot-maven-plugin`，可独立运行。
+All bootable modules except `velocity-mall-common` use `spring-boot-maven-plugin`.
 
-## 架构概览
+## Architecture Overview
 
-VelocityMall 是一个基于 Spring Cloud Alibaba 的秒杀电商微服务项目，单数据库 `velocity_mall`，按表前缀逻辑隔离（`pms_` 商品、`oms_` 订单、`ums_` 用户、`sms_` 营销）。
+VelocityMall is a Spring Cloud Alibaba ecommerce microservice project using one logical MySQL database, `velocity_mall`, separated by table prefixes:
 
-### 模块与端口
+- `pms_`: product and inventory.
+- `oms_`: orders, order items, reviews, review interactions.
+- `ums_`: users, addresses, administrators.
+- `sms_`: coupons and coupon histories.
 
-| 模块 | 端口 | 职责 |
-|------|------|------|
-| `velocity-mall-common` | -- | 共享基座（实体、VO/DTO、异常、拦截器、配置） |
-| `velocity-mall-gateway` | 8080 | Spring Cloud Gateway 入口 + JWT 鉴权 + Sentinel 限流 |
-| `velocity-mall-product` | 8081 | 商品/分类/库存管理 |
-| `velocity-mall-order` | 8082 | 订单/购物车 |
-| `velocity-mall-seckill` | 8083 | 秒杀（无数据库，纯 Redis Lua + MQ） |
-| `velocity-mall-search` | 8085 | Elasticsearch 商品搜索 |
-| `velocity-mall-coupon` | 8086 | 优惠券 |
-| `velocity-mall-review` | 8087 | 商品评价 |
-| `velocity-mall-user` | 8088 | 用户注册/登录/JWT + 收货地址 |
-| `velocity-mall-admin` | 8089 | 后台管理 |
+### Modules And Ports
 
-外部依赖：Nacos (`127.0.0.1:8848`)、MySQL 8、Redis (Redisson)、RocketMQ、Elasticsearch、Sentinel Dashboard (`127.0.0.1:8858`)、MinIO (`127.0.0.1:9000`)。
+| Module | Port | Responsibility |
+| --- | ---: | --- |
+| `velocity-mall-common` | -- | Shared base entities, DTO/VO, result model, exceptions, Redis/MyBatis/Feign/trace config, user context |
+| `velocity-mall-gateway` | 8080 | Spring Cloud Gateway, JWT auth, user/admin header injection, internal route blocking, Sentinel gateway rules |
+| `velocity-mall-product` | 8081 | Category tree, SPU/SKU query, cache protection, stock lock/release/deduct/refund, product sync MQ |
+| `velocity-mall-order` | 8082 | Cart, normal order, payment/refund mock, delayed close, seckill order persistence, delivery, receipt confirmation |
+| `velocity-mall-seckill` | 8083 | Redis Lua seckill, duplicate blocking, MQ async order, Redis occupation rollback |
+| `velocity-mall-search` | 8085 | Elasticsearch SKU search, index rebuild, product sync consumer |
+| `velocity-mall-coupon` | 8086 | Coupon claim, per-user limit, duplicate protection, stock deduction |
+| `velocity-mall-review` | 8087 | Product review CRUD, stats cache, like/dislike switching, purchase eligibility check |
+| `velocity-mall-user` | 8088 | User registration/login/JWT, current user info, shipping addresses |
+| `velocity-mall-admin` | 8089 | Admin login, order delivery, SPU publish/unpublish |
 
-### 关键中间件版本
+External dependencies: Nacos `127.0.0.1:8848`, MySQL 8, Redis 7.2, RocketMQ 4.9.4, Elasticsearch 8.10.4, Sentinel Dashboard `127.0.0.1:8858`, optional MinIO `127.0.0.1:9000`.
 
-Java 17, Spring Boot 3.2.4, Spring Cloud 2023.0.1, Spring Cloud Alibaba 2023.0.1.0, MyBatis-Plus 3.5.7, RocketMQ Starter 2.3.0, Redisson 3.27.2, JJWT 0.11.5。
+## Current Capability Baseline
 
-## 核心架构模式
+The implemented baseline covers Phase 1-16 and Phase 18-21. Phase 8/9 and Phase 17 are historical numbering gaps, not current completion boundaries.
 
-### 鉴权链路
+- Phase 10: mock payment callback and physical stock deduction.
+- Phase 11: Redis cart and normal-order physical stock lock flow.
+- Phase 12: C-end order list/detail/cancel/refund.
+- Phase 13: Elasticsearch search and product sync.
+- Phase 14: category tree with Redis/Redisson cache protection.
+- Phase 15: coupon claim with Redis pre-limit and MySQL optimistic stock deduction.
+- Phase 16: reviews, stats cache, like/dislike interaction.
+- Phase 18: user registration/login/JWT.
+- Phase 19: shipping address snapshot for order creation.
+- Phase 20: order delivery and receipt confirmation.
+- Phase 21: admin login plus delivery and SPU status operations.
 
-1. Gateway `AuthGlobalFilter` 校验 JWT Token，提取 `userId`（普通用户）或 `adminId`（管理员）→ 写入 `X-User-Id` / `X-Admin-Id` Header 传递给下游
-2. 各服务的 `UserInterceptor` 或 `AdminInterceptor` 读取 Header → 写入 `UserContext` / `AdminContext` ThreadLocal
-3. 白名单：所有 `GET` 请求 + `/api/v1/users/register` 和 `/api/v1/users/login` 无需 Token
-4. 黑名单：`/inner/**` 路径在网关层禁止外部请求，仅服务间 Feign / 内部 HTTP 调用
+## Auth And Gateway Rules
 
-### 库存管理
+Gateway `AuthGlobalFilter` is the auth boundary.
 
-- **普通订单**：两阶段锁定。OrderService 通过 Feign 调用 ProductService 锁库存 → 写入 `pms_stock_lock_log` 记录 → 支付成功后 deductPhysicalStock → 超时/退款时 unlockPhysicalStock
-- **秒杀订单**：Redis Lua 脚本原子预扣（`velocitymall:seckill:stock:{skuId}`）→ 异步 MQ 创建订单 → 5 分钟超时 MQ 自动回滚（Lua COMPENSATE/ROLLBACK）
-- 库存 SQL 使用 `UPDATE ... SET stock = stock - ? WHERE stock >= ?` 做悲观锁
-- 实体层通过 `version` 字段 + MyBatis-Plus 乐观锁插件保证并发安全
-- 解锁操作通过 Redis key 做幂等（same `orderSn` won't unlock twice）
+- Anonymous POST whitelist: `/api/v1/users/register`, `/api/v1/users/login`, `/api/v1/admin/login`.
+- Anonymous GET whitelist: `/api/v1/products/spus/**`, numeric `/api/v1/products/skus/{sku-id}`, `/api/v1/search/**`, `/api/v1/categories/tree`, `/api/v1/reviews/products/**`.
+- Normal user JWT must contain `userId`; Gateway injects `X-User-Id`.
+- Admin JWT must contain `adminId`; Gateway injects `X-Admin-Id` for `/api/v1/admin/**`.
+- Gateway blocks external access to `/api/v1/products/inner/**`, `/api/v1/search/inner/**`, `/api/v1/orders/inner/**`, `/api/v1/users/inner/**`, and legacy product stock lock/unlock endpoints.
 
-### RocketMQ 消息流
+## Core Patterns
 
-| Topic | 生产者 | 消费者 | 用途 |
-|-------|--------|--------|------|
-| `seckill-order-topic` | seckill | order | 秒杀后异步创建订单 |
-| `seckill-delay-topic` | order | order（延时5分钟） | 秒杀订单超时关单 |
-| `seckill-rollback-topic` | order | seckill | 秒杀库存回滚 |
-| `normal-order-delay-topic` | order | order（延时30分钟） | 普通订单超时关单 |
-| `payment-success-topic` | order | product | 支付完成 → 扣减物理库存 |
-| `order-refund-topic` | order | product | 退款 → 退还库存 |
-| `product-sync-topic` | product | search（顺序消费） | SKU 变更 → 同步 ES 索引 |
-| `velocity-mall-order-delay-topic` | order | order | 旧版订单延时关闭 |
+### Inventory
 
-MQ 消费幂等通过 `mq_consume_log` 表（唯一键 `topic + consumer_group + order_sn`）保证。
+- Normal orders use Product service MySQL conditional updates to lock stock: `stock - lock_stock >= quantity`.
+- `pms_stock_lock_log` records normal-order stock lifecycle.
+- Payment success deducts physical stock and locked stock for normal orders.
+- Refund restores physical stock and decreases sale count.
+- Seckill uses Redis Lua to atomically check duplicate purchase, deduct Redis stock, and record user occupation before sending `seckill-order-topic`.
 
-### 分布式追踪
+### RocketMQ
 
-`X-Trace-Id` Header 在 Gateway 生成 → Feign RequestInterceptor 透传 → RocketMQ `MqTraceContext` 透传 → MDC 记录日志。
+| Topic | Producer | Consumer | Purpose |
+| --- | --- | --- | --- |
+| `normal-order-delay-topic` | order | order | Normal order timeout close |
+| `velocity-mall-order-delay-topic` | order | order | Legacy order delayed close |
+| `payment-success-topic` | order | product | Payment success physical stock deduction |
+| `order-refund-topic` | order | product | Refund stock and sale-count rollback |
+| `seckill-order-topic` | seckill | order | Async seckill order creation |
+| `seckill-delay-topic` | order | order | Seckill order timeout close |
+| `seckill-rollback-topic` | order | seckill | Redis seckill stock rollback |
+| `product-sync-topic` | product | search | SKU/SPU updates to Elasticsearch |
 
-## 秒杀链路
+Product-side MQ idempotency uses `mq_consume_log` with unique `topic + consumer_group + order_sn`.
 
-```
-用户请求 → Gateway (Sentinel 5 QPS/SKU 限流)
-  → seckill-service (Redis Lua: 检查重复 + 扣库存)
-    → RocketMQ (seckill-order-topic)
-      → order-service (异步创建订单 + 发送延时关闭消息)
-        → [超时触发] order-service (关闭订单 + 发送回滚消息)
-          → seckill-service (Redis Lua: 回滚库存)
-```
+### Trace
 
-`SeckillSkuScheduledTask` 每分钟从 DB 预热秒杀库存到 Redis。
+`X-Trace-Id` is generated by Gateway, loaded into MDC by servlet services, propagated through OpenFeign, and copied into RocketMQ messages through `MqTraceContext`.
 
-## 通用编码约定
+## E2E Coverage
 
-- 实体继承 `BaseEntity`，提供 `id`(雪花ID)、`createTime`、`updateTime`、`isDeleted`（逻辑删除）
-- 并发冲突实体继承 `VersionedEntity`，额外提供 `version` 字段
-- Controller 返回统一使用 `Result<T>` 包装，成功用 `Result.success(data)`，失败由 `BusinessException` + `GlobalExceptionHandler` 统一处理
-- 服务间内部 API 放在 `/inner/**` 路径下（如 `/api/v1/products/inner/sku/{id}`），这些路径在网关层被阻止外部访问
-- 数据库 DDL 在 `doc/sql/` 目录下按阶段编号
+`scripts/ci/e2e.sh` currently starts the full application chain and verifies:
+
+- User register/login and JWT acquisition.
+- User address creation and order address snapshot.
+- Admin login.
+- Category, SPU, SKU public reads.
+- Coupon auth, claim, duplicate claim behavior.
+- Product/search/order/user internal API blocking through Gateway.
+- Cart add/list.
+- Normal order create, payment, stock deduction, MQ idempotency.
+- Admin delivery and C-end receipt confirmation.
+- Review create/list/like/dislike toggle/stats/delete.
+- Refund flow and product stock rollback.
+- Seckill Redis Lua path and async order persistence.
+- Search index rebuild and public search.
+
+## Coding Conventions
+
+- Controller returns `Result<T>` and delegates business logic to Service.
+- External API responses must not expose Entity directly.
+- Entities inherit `BaseEntity`; concurrent state/inventory entities inherit `VersionedEntity`.
+- Business errors use `BusinessException` and `ResultCode`.
+- Internal service APIs live under `/inner/**` and must stay blocked by Gateway.
+- Redis keys should stay centralized in constants/helpers.
+- Prefer conditional SQL updates and explicit idempotency for state transitions.
+- Run at least `mvn clean package -DskipTests` after structural code changes.

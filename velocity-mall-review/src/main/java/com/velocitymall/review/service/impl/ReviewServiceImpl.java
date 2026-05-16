@@ -405,6 +405,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private ReviewVO toReviewVO(ProductReview review, Integer currentInteractionType) {
+        Long currentUserId = UserContext.getUserId();
         return ReviewVO.builder()
                 .id(review.getId())
                 .skuId(review.getSkuId())
@@ -416,6 +417,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .dislikeCount(review.getDislikeCount())
                 .replyCount(review.getReplyCount())
                 .currentInteractionType(currentInteractionType == null ? NO_INTERACTION : currentInteractionType)
+                .mine(Objects.equals(currentUserId, review.getUserId()))
                 .createTime(review.getCreateTime())
                 .build();
     }

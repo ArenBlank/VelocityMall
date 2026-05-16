@@ -19,6 +19,6 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(userInterceptor)
                 .addPathPatterns("/api/v1/coupons/**")
-                .excludePathPatterns("/error");
+                .excludePathPatterns("/api/v1/coupons/inner/**", "/error");
     }
 }

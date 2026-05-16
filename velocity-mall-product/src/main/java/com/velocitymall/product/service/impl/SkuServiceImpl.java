@@ -16,6 +16,7 @@ import com.velocitymall.product.constant.ProductCacheConstant;
 import com.velocitymall.product.entity.MqConsumeLog;
 import com.velocitymall.product.entity.Sku;
 import com.velocitymall.product.entity.StockLockLog;
+import com.velocitymall.product.config.ProductCoverFallbackProperties;
 import com.velocitymall.product.mapper.MqConsumeLogMapper;
 import com.velocitymall.product.mapper.SkuMapper;
 import com.velocitymall.product.mapper.StockLockLogMapper;
@@ -79,6 +80,8 @@ public class SkuServiceImpl implements SkuService {
 
     private final RocketMQTemplate rocketMQTemplate;
 
+    private final ProductCoverFallbackProperties coverFallbackProperties;
+
     @Override
     public SkuVO getSkuById(Long skuId) {
         Sku sku = skuMapper.selectById(skuId);
@@ -94,6 +97,7 @@ public class SkuServiceImpl implements SkuService {
         if (source == null) {
             throw new BusinessException(ResultCode.BIZ_WARNING, "SKU不存在或已删除");
         }
+        applyCoverFallback(source);
         return source;
     }
 
@@ -107,6 +111,7 @@ public class SkuServiceImpl implements SkuService {
         List<ProductSkuSearchDTO> records = safeTotal == 0
                 ? List.of()
                 : skuMapper.selectPublishedSearchSources(offset, size);
+        records.forEach(this::applyCoverFallback);
         return new PageVO<>(page, size, safeTotal, pages, records);
     }
 
@@ -434,6 +439,19 @@ public class SkuServiceImpl implements SkuService {
         }
     }
 
+    private void applyCoverFallback(ProductSkuSearchDTO source) {
+        if (source != null && !StringUtils.hasText(source.getSkuPic())) {
+            source.setSkuPic(coverFallbackProperties.pick(source.getSkuId()));
+        }
+    }
+
+    private String resolveCoverImg(String coverImg, Long skuId) {
+        if (StringUtils.hasText(coverImg)) {
+            return coverImg;
+        }
+        return coverFallbackProperties.pick(skuId);
+    }
+
     private SkuVO convertSkuVO(Sku sku) {
         int stock = sku.getStock() == null ? 0 : sku.getStock();
         int lockStock = sku.getLockStock() == null ? 0 : sku.getLockStock();
@@ -444,7 +462,7 @@ public class SkuServiceImpl implements SkuService {
                 .skuCode(sku.getSkuCode())
                 .price(sku.getPrice())
                 .availableStock(Math.max(stock - lockStock, 0))
-                .coverImg(sku.getCoverImg())
+                .coverImg(resolveCoverImg(sku.getCoverImg(), sku.getId()))
                 .build();
     }
 }

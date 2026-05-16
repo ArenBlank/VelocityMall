@@ -1,0 +1,97 @@
+﻿VelocityMall 一键启动命令
+
+说明：
+- 本项目本地开发采用“混合部署”。
+- MySQL、Redis、Nacos、MinIO、RocketMQ、Elasticsearch、Kibana、Nginx 使用 Docker 启动。
+- Java 微服务直接运行在 Windows 宿主机 JDK 17 上。
+- 后端一键启动命令已经包含管理端后端服务 velocity-mall-admin，端口为 8089。
+- 请在 PowerShell 中执行下面命令。
+
+============================================================
+一键启动后端所有服务（包含管理端后端）
+============================================================
+
+$root = "D:\DevelopmentLOOK\Idea\idea_project_workspace\VelocityMall"
+Set-Location $root
+
+docker compose -f docker/docker-compose.yml up -d mysql redis nacos minio rmqnamesrv rmqbroker elasticsearch kibana nginx
+
+mvn clean package -DskipTests
+
+Get-CimInstance Win32_Process |
+  Where-Object {
+    $_.ProcessId -ne $PID -and
+    $_.CommandLine -match '-jar\s+.*velocity-mall-.*\.jar'
+  } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+$java = "D:\EnvironmentLOOK\jdk-17\bin\java.exe"
+if (-not (Test-Path $java)) { $java = "java" }
+
+$logDir = Join-Path $root "logs\runtime"
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+$services = @(
+  @{ Module = "velocity-mall-product"; Port = 8081 },
+  @{ Module = "velocity-mall-order"; Port = 8082 },
+  @{ Module = "velocity-mall-seckill"; Port = 8083 },
+  @{ Module = "velocity-mall-search"; Port = 8085 },
+  @{ Module = "velocity-mall-coupon"; Port = 8086 },
+  @{ Module = "velocity-mall-review"; Port = 8087 },
+  @{ Module = "velocity-mall-user"; Port = 8088 },
+  @{ Module = "velocity-mall-admin"; Port = 8089 },
+  @{ Module = "velocity-mall-gateway"; Port = 8080 },
+  @{ Module = "velocity-mall-gateway"; Port = 8090 },
+  @{ Module = "velocity-mall-gateway"; Port = 8091 }
+)
+
+foreach ($svc in $services) {
+  $module = $svc.Module
+  $port = $svc.Port
+  $jar = Join-Path $root "$module\target\$module-1.0.0-SNAPSHOT.jar"
+  $out = Join-Path $logDir "$module-$port.out.log"
+  $err = Join-Path $logDir "$module-$port.err.log"
+
+  Start-Process -FilePath $java `
+    -ArgumentList @("-Dfile.encoding=UTF-8", "-jar", $jar, "--server.port=$port") `
+    -WorkingDirectory $root `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $out `
+    -RedirectStandardError $err
+}
+
+后端统一入口：
+http://127.0.0.1
+
+运行日志目录：
+D:\DevelopmentLOOK\Idea\idea_project_workspace\VelocityMall\logs\runtime
+
+============================================================
+一键启动用户端前端
+============================================================
+
+Set-Location "D:\DevelopmentLOOK\Idea\idea_project_workspace\VelocityMall\velocity-mall-web"
+npm install
+npm run dev -- --host 127.0.0.1 --port 5173
+
+用户端访问地址：
+http://127.0.0.1:5173/login
+
+用户端测试账号：
+用户名：demo_buyer
+密码：123456
+
+============================================================
+一键启动管理端前端
+============================================================
+
+Set-Location "D:\DevelopmentLOOK\Idea\idea_project_workspace\VelocityMall\velocity-mall-admin-web"
+npm install
+npm run dev -- --host 127.0.0.1 --port 5174
+
+管理端访问地址：
+http://127.0.0.1:5174/login
+
+管理端测试账号：
+用户名：admin
+密码：123456

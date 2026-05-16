@@ -7,6 +7,7 @@ import com.velocitymall.common.model.dto.NormalOrderDelayDTO;
 import com.velocitymall.common.model.dto.StockLockDTO;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.common.result.ResultCode;
+import com.velocitymall.order.client.CouponFeignClient;
 import com.velocitymall.order.client.ProductFeignClient;
 import com.velocitymall.order.entity.Order;
 import com.velocitymall.order.mapper.OrderMapper;
@@ -35,6 +36,8 @@ public class NormalOrderDelayConsumer implements RocketMQListener<NormalOrderDel
 
     private final ProductFeignClient productFeignClient;
 
+    private final CouponFeignClient couponFeignClient;
+
     @Override
     public void onMessage(NormalOrderDelayDTO message) {
         MqTraceContext.runWithTrace(message, () -> handleMessage(message));
@@ -57,12 +60,14 @@ public class NormalOrderDelayConsumer implements RocketMQListener<NormalOrderDel
                 return;
             }
             unlockPhysicalStock(message);
+            releaseCoupon(message.getOrderSn());
             log.info("Normal order closed and locked stock released. orderSn: {}", message.getOrderSn());
             return;
         }
 
         if (ORDER_STATUS_CLOSED.equals(status)) {
             unlockPhysicalStock(message);
+            releaseCoupon(message.getOrderSn());
             log.info("Normal order already closed, locked stock release retried. orderSn: {}", message.getOrderSn());
             return;
         }
@@ -85,6 +90,7 @@ public class NormalOrderDelayConsumer implements RocketMQListener<NormalOrderDel
         }
         if (ORDER_STATUS_CLOSED.equals(latestOrder.getStatus())) {
             unlockPhysicalStock(message);
+            releaseCoupon(message.getOrderSn());
             log.info("Normal order was closed by another consumer, locked stock release retried. orderSn: {}",
                     message.getOrderSn());
             return;
@@ -112,6 +118,20 @@ public class NormalOrderDelayConsumer implements RocketMQListener<NormalOrderDel
                     ? "商品服务无响应"
                     : result.getMessage();
             throw new BusinessException(ResultCode.BIZ_WARNING, "普通订单释放锁定库存失败，触发 MQ 重试: " + messageText);
+        }
+    }
+
+    private void releaseCoupon(String orderSn) {
+        try {
+            Result<Void> result = couponFeignClient.releaseCoupon(orderSn);
+            if (result == null || !ResultCode.SUCCESS.getCode().equals(result.getCode())) {
+                String messageText = result == null || !StringUtils.hasText(result.getMessage())
+                        ? "Coupon service no response"
+                        : result.getMessage();
+                log.warn("Normal order coupon release returned failure. orderSn: {}, message: {}", orderSn, messageText);
+            }
+        } catch (Exception exception) {
+            log.warn("Normal order coupon release failed. orderSn: {}", orderSn, exception);
         }
     }
 }

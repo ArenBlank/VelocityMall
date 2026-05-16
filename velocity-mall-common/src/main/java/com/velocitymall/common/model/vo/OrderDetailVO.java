@@ -19,6 +19,8 @@ public class OrderDetailVO {
 
     private BigDecimal totalAmount;
 
+    private BigDecimal payAmount;
+
     private Integer payType;
 
     private Integer status;

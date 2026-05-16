@@ -1,5 +1,9 @@
-target/ 
-.idea/ 
-*.iml 
-*.log 
+target/
+.idea/
+*.iml
+*.log
+node_modules/
+dist/
+output/
+upload-assets/
 docker/data/
