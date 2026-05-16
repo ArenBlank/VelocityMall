@@ -15,6 +15,7 @@ ADMIN_AUTH_HEADER=""
 
 declare -a APP_PIDS=()
 
+rm -rf "${LOG_DIR}"
 mkdir -p "${LOG_DIR}"
 
 cleanup() {
@@ -691,6 +692,132 @@ call_until_success "spu detail" GET "http://127.0.0.1:8080/api/v1/products/spus/
 sku_response="${LOG_DIR}/sku-detail.json"
 call_until_success "sku detail" GET "http://127.0.0.1:8080/api/v1/products/skus/2001" "${sku_response}"
 
+echo "=== Admin API closed-loop checks ==="
+
+admin_spu_list="${LOG_DIR}/admin-spu-list.json"
+call_once_success "admin spu list" GET "http://127.0.0.1:8080/api/v1/admin/products/spus?page=1&size=10" "${admin_spu_list}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_spu_list}" "data.records"
+
+admin_spu_create="${LOG_DIR}/admin-spu-create.json"
+call_once_success "admin spu create" POST "http://127.0.0.1:8080/api/v1/admin/products/spus" "${admin_spu_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"categoryId":3,"name":"E2E Admin Phone","description":"Admin closed-loop SPU","publishStatus":0}'
+admin_spu_id="$(json_path "${admin_spu_create}" "data.spuId")"
+wait_mysql_equals "SELECT publish_status FROM pms_spu WHERE id = ${admin_spu_id}" "0" "admin-created spu initial status"
+
+admin_spu_update="${LOG_DIR}/admin-spu-update.json"
+call_once_success "admin spu update" PUT "http://127.0.0.1:8080/api/v1/admin/products/spus/${admin_spu_id}" "${admin_spu_update}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"categoryId":3,"name":"E2E Admin Phone Updated","description":"Admin closed-loop SPU updated","publishStatus":1}'
+wait_mysql_equals "SELECT name FROM pms_spu WHERE id = ${admin_spu_id}" "E2E Admin Phone Updated" "admin-updated spu name"
+wait_mysql_equals "SELECT publish_status FROM pms_spu WHERE id = ${admin_spu_id}" "1" "admin-updated spu status"
+
+call_once_success "admin spu unpublish" PUT "http://127.0.0.1:8080/api/v1/admin/products/spus/${admin_spu_id}/status?action=unpublish" "${LOG_DIR}/admin-spu-unpublish.json" \
+  -H "${ADMIN_AUTH_HEADER}"
+wait_mysql_equals "SELECT publish_status FROM pms_spu WHERE id = ${admin_spu_id}" "0" "admin-unpublished spu status"
+
+call_once_success "admin spu publish" PUT "http://127.0.0.1:8080/api/v1/admin/products/spus/${admin_spu_id}/status?action=publish" "${LOG_DIR}/admin-spu-publish.json" \
+  -H "${ADMIN_AUTH_HEADER}"
+wait_mysql_equals "SELECT publish_status FROM pms_spu WHERE id = ${admin_spu_id}" "1" "admin-published spu status"
+
+admin_spu_detail="${LOG_DIR}/admin-spu-detail.json"
+call_once_success "admin spu detail" GET "http://127.0.0.1:8080/api/v1/admin/products/spus/${admin_spu_id}" "${admin_spu_detail}" \
+  -H "${ADMIN_AUTH_HEADER}"
+
+# CI E2E does not start MinIO, so SKU cover is verified through coverImg create/update fields.
+admin_sku_create="${LOG_DIR}/admin-sku-create.json"
+call_once_success "admin sku create" POST "http://127.0.0.1:8080/api/v1/admin/products/skus" "${admin_sku_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"spuId\":${admin_spu_id},\"skuName\":\"E2E Admin Phone 128G\",\"skuCode\":\"E2E-ADMIN-128G\",\"price\":1299.00,\"stock\":20,\"coverImg\":\"https://static.velocitymall.local/sku/admin-e2e-128g.png\"}"
+admin_sku_id="$(json_path "${admin_sku_create}" "data.skuId")"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = ${admin_sku_id}" "20" "admin-created sku stock"
+wait_mysql_equals "SELECT cover_img FROM pms_sku WHERE id = ${admin_sku_id}" "https://static.velocitymall.local/sku/admin-e2e-128g.png" "admin-created sku cover"
+
+admin_sku_update="${LOG_DIR}/admin-sku-update.json"
+call_once_success "admin sku update" PUT "http://127.0.0.1:8080/api/v1/admin/products/skus/${admin_sku_id}" "${admin_sku_update}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"spuId\":${admin_spu_id},\"skuName\":\"E2E Admin Phone 256G\",\"skuCode\":\"E2E-ADMIN-256G\",\"price\":1399.00,\"stock\":25,\"coverImg\":\"https://static.velocitymall.local/sku/admin-e2e-256g.png\"}"
+wait_mysql_equals "SELECT sku_code FROM pms_sku WHERE id = ${admin_sku_id}" "E2E-ADMIN-256G" "admin-updated sku code"
+wait_mysql_equals "SELECT price FROM pms_sku WHERE id = ${admin_sku_id}" "1399.00" "admin-updated sku price"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = ${admin_sku_id}" "25" "admin-updated sku stock"
+
+admin_seckill_create="${LOG_DIR}/admin-seckill-create.json"
+call_once_success "admin seckill activity create" POST "http://127.0.0.1:8080/api/v1/admin/seckill/activities" "${admin_seckill_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"skuId\":${admin_sku_id},\"spuId\":${admin_spu_id},\"activityName\":\"E2E Admin Flash Sale\",\"seckillPrice\":999.00,\"originalPrice\":1399.00,\"seckillStock\":6,\"startTime\":\"2020-01-01T00:00:00\",\"endTime\":\"2099-12-31T23:59:59\",\"status\":0}"
+admin_activity_id="$(json_path "${admin_seckill_create}" "data.id")"
+wait_mysql_equals "SELECT status FROM sms_seckill_activity WHERE id = ${admin_activity_id}" "0" "admin-created seckill status"
+
+admin_seckill_update="${LOG_DIR}/admin-seckill-update.json"
+call_once_success "admin seckill activity update" PUT "http://127.0.0.1:8080/api/v1/admin/seckill/activities/${admin_activity_id}" "${admin_seckill_update}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"skuId\":${admin_sku_id},\"spuId\":${admin_spu_id},\"activityName\":\"E2E Admin Flash Sale Updated\",\"seckillPrice\":899.00,\"originalPrice\":1399.00,\"seckillStock\":8,\"startTime\":\"2020-01-01T00:00:00\",\"endTime\":\"2099-12-31T23:59:59\",\"status\":0}"
+wait_mysql_equals "SELECT seckill_stock FROM sms_seckill_activity WHERE id = ${admin_activity_id}" "8" "admin-updated seckill stock"
+
+call_once_success "admin seckill activity enable" PUT "http://127.0.0.1:8080/api/v1/admin/seckill/activities/${admin_activity_id}/status" "${LOG_DIR}/admin-seckill-enable.json" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"status":1}'
+wait_mysql_equals "SELECT status FROM sms_seckill_activity WHERE id = ${admin_activity_id}" "1" "admin-enabled seckill status"
+
+admin_seckill_preheat="${LOG_DIR}/admin-seckill-preheat.json"
+call_once_success "admin seckill activity preheat" POST "http://127.0.0.1:8080/api/v1/admin/seckill/activities/${admin_activity_id}/preheat" "${admin_seckill_preheat}" \
+  -H "${ADMIN_AUTH_HEADER}"
+wait_redis_equals "admin seckill stock after preheat" "8" GET velocitymall:seckill:stock:${admin_sku_id}
+
+admin_seckill_list="${LOG_DIR}/admin-seckill-list.json"
+call_once_success "admin seckill activity list" GET "http://127.0.0.1:8080/api/v1/admin/seckill/activities?page=1&size=10&skuId=${admin_sku_id}" "${admin_seckill_list}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_seckill_list}" "data.records"
+
+admin_coupon_create="${LOG_DIR}/admin-coupon-create.json"
+call_once_success "admin coupon create" POST "http://127.0.0.1:8080/api/v1/admin/coupons" "${admin_coupon_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"name":"E2E Admin Coupon","amount":30.00,"minPoint":100.00,"stock":3,"limitPerUser":1,"startTime":"2020-01-01T00:00:00","endTime":"2099-12-31T23:59:59","status":0}'
+admin_coupon_id="$(json_path "${admin_coupon_create}" "data.id")"
+wait_mysql_equals "SELECT status FROM sms_coupon WHERE id = ${admin_coupon_id}" "0" "admin-created coupon status"
+
+admin_coupon_update="${LOG_DIR}/admin-coupon-update.json"
+call_once_success "admin coupon update" PUT "http://127.0.0.1:8080/api/v1/admin/coupons/${admin_coupon_id}" "${admin_coupon_update}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"name":"E2E Admin Coupon Updated","amount":35.00,"minPoint":120.00,"stock":4,"limitPerUser":1,"startTime":"2020-01-01T00:00:00","endTime":"2099-12-31T23:59:59","status":0}'
+wait_mysql_equals "SELECT name FROM sms_coupon WHERE id = ${admin_coupon_id}" "E2E Admin Coupon Updated" "admin-updated coupon name"
+wait_mysql_equals "SELECT stock FROM sms_coupon WHERE id = ${admin_coupon_id}" "4" "admin-updated coupon stock"
+
+call_once_success "admin coupon enable" PUT "http://127.0.0.1:8080/api/v1/admin/coupons/${admin_coupon_id}/status" "${LOG_DIR}/admin-coupon-enable.json" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"status":1}'
+wait_mysql_equals "SELECT status FROM sms_coupon WHERE id = ${admin_coupon_id}" "1" "admin-enabled coupon status"
+
+admin_coupon_list="${LOG_DIR}/admin-coupon-list.json"
+call_once_success "admin coupon list" GET "http://127.0.0.1:8080/api/v1/admin/coupons?page=1&size=10&status=1" "${admin_coupon_list}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_coupon_list}" "data.records"
+
+admin_coupon_claim="${LOG_DIR}/admin-coupon-claim.json"
+call_once_success "claim admin-created coupon" POST "http://127.0.0.1:8080/api/v1/coupons/${admin_coupon_id}/claim" "${admin_coupon_claim}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT stock FROM sms_coupon WHERE id = ${admin_coupon_id}" "3" "admin-created coupon stock after claim"
+wait_mysql_equals "SELECT COUNT(1) FROM sms_coupon_history WHERE coupon_id = ${admin_coupon_id} AND user_id = ${USER_ID}" "1" "admin-created coupon history count"
+
+admin_search_rebuild="${LOG_DIR}/admin-search-rebuild.json"
+call_until_success "admin search index rebuild" POST "http://127.0.0.1:8080/api/v1/admin/search/skus/rebuild-index" "${admin_search_rebuild}" \
+  -H "${ADMIN_AUTH_HEADER}"
+
+admin_activity_public="${LOG_DIR}/admin-seckill-public-sku.json"
+call_once_success "public seckill activity by admin sku" GET "http://127.0.0.1:8080/api/v1/seckill/activities/skus/${admin_sku_id}" "${admin_activity_public}" \
+  -H "${USER_AUTH_HEADER}"
+
 coupon_unauthorized="${LOG_DIR}/coupon-unauthorized.json"
 coupon_unauthorized_status="$(request_status POST "http://127.0.0.1:8080/api/v1/coupons/3001/claim" "${coupon_unauthorized}")"
 if [[ "${coupon_unauthorized_status}" != "401" ]]; then
@@ -711,6 +838,18 @@ if [[ "${inner_status}" != "403" ]]; then
   exit 1
 fi
 assert_json_code "${inner_response}" 40300
+
+legacy_stock_forbidden="${LOG_DIR}/product-legacy-stock-forbidden.json"
+legacy_stock_status="$(request_status PUT "http://127.0.0.1:8080/api/v1/products/skus/lock-stock" "${legacy_stock_forbidden}" \
+  -H "${USER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"orderSn":"E2E_LEGACY_FORBIDDEN","skuId":2001,"quantity":1}')"
+if [[ "${legacy_stock_status}" != "403" ]]; then
+  echo "Expected product legacy stock API HTTP 403, got ${legacy_stock_status}"
+  cat "${legacy_stock_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${legacy_stock_forbidden}" 40300
 
 coupon_claim="${LOG_DIR}/coupon-claim.json"
 call_once_success "coupon claim" POST "http://127.0.0.1:8080/api/v1/coupons/3001/claim" "${coupon_claim}" \
@@ -765,6 +904,15 @@ wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "0" "locked s
 wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after payment"
 wait_mysql_equals "SELECT status FROM pms_stock_lock_log WHERE order_sn = '${order_sn}' AND sku_id = 2001" "2" "stock lock log after payment"
 wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'payment-success-topic' AND consumer_group = 'payment-success-consumer-group' AND order_sn = '${order_sn}'" "1" "payment consume log"
+
+admin_order_list="${LOG_DIR}/admin-order-list.json"
+call_once_success "admin order list" GET "http://127.0.0.1:8080/api/v1/admin/orders?page=1&size=10&orderSn=${order_sn}" "${admin_order_list}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_order_list}" "data.records"
+
+admin_order_detail="${LOG_DIR}/admin-order-detail.json"
+call_once_success "admin order detail" GET "http://127.0.0.1:8080/api/v1/admin/orders/${order_sn}" "${admin_order_detail}" \
+  -H "${ADMIN_AUTH_HEADER}"
 
 # Admin deliver (B-end operates on C-end order)
 deliver_resp="${LOG_DIR}/admin-deliver.json"
@@ -826,9 +974,15 @@ if [[ "${stats_status}" != "200" ]]; then
 fi
 assert_success_response "${stats_resp}"
 
-# Delete the review
-call_once_success "review delete" DELETE "http://127.0.0.1:8080/api/v1/reviews/${review_id}" "${LOG_DIR}/review-delete.json" \
-  -H "${USER_AUTH_HEADER}"
+admin_review_list="${LOG_DIR}/admin-review-list.json"
+call_once_success "admin review list" GET "http://127.0.0.1:8080/api/v1/admin/reviews?page=1&size=10&spuId=1001" "${admin_review_list}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_review_list}" "data.records"
+
+# Delete the review from Admin backend.
+call_once_success "admin review delete" DELETE "http://127.0.0.1:8080/api/v1/admin/reviews/${review_id}" "${LOG_DIR}/admin-review-delete.json" \
+  -H "${ADMIN_AUTH_HEADER}"
+wait_mysql_equals "SELECT is_deleted FROM oms_product_review WHERE id = ${review_id}" "1" "admin-deleted review flag"
 
 # ============================================
 # Refund test: separate order for reverse flow
