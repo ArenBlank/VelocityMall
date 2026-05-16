@@ -128,16 +128,37 @@ jobs:
           docker run -d --name ci-nacos \
             -p 8848:8848 -p 9848:9848 \
             -e MODE=standalone \
+            -e PREFER_HOST_MODE=hostname \
+            -e JVM_XMS=512m \
+            -e JVM_XMX=512m \
+            -e JVM_XMN=256m \
+            -e JAVA_OPT="-XX:-UseContainerSupport -Dnacos.standalone=true" \
             nacos/nacos-server:v2.2.3
+          nacos_http_ok=false
           for i in $(seq 1 90); do
+            if [[ -z "$(docker ps -q -f name=^/ci-nacos$)" ]]; then
+              echo "ERROR: Nacos container exited before readiness"
+              docker logs ci-nacos || true
+              exit 1
+            fi
             if curl -fsS http://127.0.0.1:8848/nacos/v1/console/health/readiness > /dev/null 2>&1; then
-              echo "Nacos ready (attempt $i)"; break
+              echo "Nacos ready (attempt $i)"; nacos_http_ok=true; break
             fi
             sleep 2
           done
-          # Wait for gRPC port — readiness endpoint returns OK before gRPC is listening
+          # Wait for gRPC port; readiness can return OK before gRPC is listening
+          if [[ "$nacos_http_ok" != "true" ]]; then
+            echo "ERROR: Nacos HTTP readiness endpoint never became ready"
+            docker logs --tail 200 ci-nacos || true
+            exit 1
+          fi
           grpc_ok=false
           for i in $(seq 1 60); do
+            if [[ -z "$(docker ps -q -f name=^/ci-nacos$)" ]]; then
+              echo "ERROR: Nacos container exited before gRPC was ready"
+              docker logs ci-nacos || true
+              exit 1
+            fi
             if (echo > /dev/tcp/127.0.0.1/9848) >/dev/null 2>&1; then
               echo "Nacos gRPC ready (attempt $i)"; grpc_ok=true; break
             fi
@@ -145,6 +166,7 @@ jobs:
           done
           if [[ "$grpc_ok" != "true" ]]; then
             echo "ERROR: Nacos gRPC port 9848 never opened"
+            docker logs --tail 200 ci-nacos || true
             exit 1
           fi
           sleep 5
@@ -152,32 +174,57 @@ jobs:
 
       - name: Start RocketMQ
         run: |
+          docker network create ci-perf-net >/dev/null 2>&1 || true
           # NameServer
           docker run -d --name ci-rmqnamesrv \
+            --network ci-perf-net \
             -p 9876:9876 \
             -e JAVA_OPT_EXT="-server -Xms128m -Xmx128m -Xmn64m" \
             apache/rocketmq:4.9.4 sh mqnamesrv
           # Broker
           docker run -d --name ci-rmqbroker \
+            --network ci-perf-net \
             -p 10911:10911 -p 10909:10909 \
-            -e NAMESRV_ADDR="127.0.0.1:9876" \
+            -e NAMESRV_ADDR="ci-rmqnamesrv:9876" \
             -e JAVA_OPT_EXT="-server -Xms256m -Xmx256m -Xmn128m" \
             apache/rocketmq:4.9.4 sh -c \
-            "printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=127.0.0.1:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf && sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf"
+            "printf 'brokerClusterName=DefaultCluster\nbrokerName=broker-a\nbrokerId=0\nnamesrvAddr=ci-rmqnamesrv:9876\nbrokerIP1=127.0.0.1\nautoCreateTopicEnable=true\ndeleteWhen=04\nfileReservedTime=48\nbrokerRole=ASYNC_MASTER\nflushDiskType=ASYNC_FLUSH\n' > /home/rocketmq/rocketmq-4.9.4/conf/broker.conf && sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf"
           # Wait for NameServer
+          namesrv_ok=false
           for i in $(seq 1 30); do
+            if [[ -z "$(docker ps -q -f name=^/ci-rmqnamesrv$)" ]]; then
+              echo "ERROR: RocketMQ NameServer container exited"
+              docker logs ci-rmqnamesrv || true
+              exit 1
+            fi
             if (echo > /dev/tcp/127.0.0.1/9876) >/dev/null 2>&1; then
-              echo "RocketMQ NameServer ready (attempt $i)"; break
+              echo "RocketMQ NameServer ready (attempt $i)"; namesrv_ok=true; break
             fi
             sleep 2
           done
+          if [[ "$namesrv_ok" != "true" ]]; then
+            echo "ERROR: RocketMQ NameServer port 9876 never opened"
+            docker logs --tail 200 ci-rmqnamesrv || true
+            exit 1
+          fi
           # Wait for Broker
+          broker_ok=false
           for i in $(seq 1 30); do
+            if [[ -z "$(docker ps -q -f name=^/ci-rmqbroker$)" ]]; then
+              echo "ERROR: RocketMQ Broker container exited"
+              docker logs ci-rmqbroker || true
+              exit 1
+            fi
             if (echo > /dev/tcp/127.0.0.1/10911) >/dev/null 2>&1; then
-              echo "RocketMQ Broker ready (attempt $i)"; break
+              echo "RocketMQ Broker ready (attempt $i)"; broker_ok=true; break
             fi
             sleep 2
           done
+          if [[ "$broker_ok" != "true" ]]; then
+            echo "ERROR: RocketMQ Broker port 10911 never opened"
+            docker logs --tail 200 ci-rmqbroker || true
+            exit 1
+          fi
           sleep 5
           echo "RocketMQ ready"
 
@@ -372,6 +419,11 @@ jobs:
       - name: Dump logs on failure
         if: failure()
         run: |
+          docker ps -a || true
+          for c in ci-nacos ci-rmqnamesrv ci-rmqbroker; do
+            echo "========== docker logs: $c =========="
+            docker logs --tail 120 "$c" || true
+          done
           for f in /tmp/*.log; do
             echo "========== $f =========="
             tail -80 "$f" || true
