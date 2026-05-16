@@ -322,8 +322,38 @@ jobs:
       - name: Generate Test Users
         run: |
           cd scripts/performance
-          python3 generate_users.py
+          LOAD_TEST_USERS=200 python3 generate_users.py
           python3 -c "import json; print(f'{len(json.load(open(\"users.json\")))} users ready')"
+
+      - name: Warm seckill Redis stock
+        run: |
+          python3 - <<'PY'
+          import socket
+          import time
+
+          def redis(*parts):
+              payload = f"*{len(parts)}\r\n".encode()
+              for part in parts:
+                  value = str(part).encode()
+                  payload += f"${len(value)}\r\n".encode() + value + b"\r\n"
+              with socket.create_connection(("127.0.0.1", 6379), timeout=3) as sock:
+                  sock.sendall(payload)
+                  return sock.recv(4096)
+
+          for _ in range(60):
+              try:
+                  if redis("PING").startswith(b"+PONG"):
+                      break
+              except OSError:
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("Redis did not become ready")
+
+          redis("DEL", "velocitymall:seckill:stock:2001", "velocitymall:seckill:bought:2001")
+          redis("SET", "velocitymall:seckill:stock:2001", "1000")
+          print("Seckill Redis stock warmed for SKU 2001")
+          PY
 
       - name: Run k6 Multi-User Seckill (CI mode)
         run: |

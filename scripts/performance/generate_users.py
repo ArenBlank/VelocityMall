@@ -2,6 +2,8 @@
 Generate 200 test users and their JWT tokens for k6 multi-user load testing.
 """
 import json
+import os
+from pathlib import Path
 import sys
 import time
 import urllib.request
@@ -9,7 +11,8 @@ import urllib.error
 
 BASE = "http://127.0.0.1:8080/api/v1/users"
 PASSWORD = "test123"
-TOTAL = 2000
+DEFAULT_TOTAL = 200 if os.getenv("GITHUB_ACTIONS") == "true" else 2000
+TOTAL = int(os.getenv("LOAD_TEST_USERS", DEFAULT_TOTAL))
 RETRY_MAX = 30
 RETRY_DELAY = 2
 
@@ -84,7 +87,7 @@ for i in range(1, TOTAL + 1):
 
     time.sleep(0.02)
 
-output_path = "scripts/performance/extreme_users.json"
+output_path = Path(__file__).with_name("users.json")
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(users, f, ensure_ascii=False)
 
