@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: velocity-mall-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -48,11 +51,37 @@ jobs:
             exit 1
           fi
 
+  admin-web-build:
+    name: Admin Web Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: velocity-mall-admin-web/package-lock.json
+
+      - name: Install admin web dependencies
+        working-directory: velocity-mall-admin-web
+        run: npm ci
+
+      - name: Build admin web
+        working-directory: velocity-mall-admin-web
+        run: npm run build
+
   full-chain-e2e:
     name: Full Chain E2E
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: build
+    needs:
+      - build
+      - admin-web-build
 
     steps:
       - name: Checkout

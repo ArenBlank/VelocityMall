@@ -330,6 +330,7 @@ Redis Key：
 
 - 所有请求走 `/api/v1/admin/**` 或已有 Admin 聚合接口，不直接调用后端内部服务端口。
 - 失败路径必须展示后端业务错误信息，不吞异常。
+- CI 已新增 `Admin Web Build`，固定执行 `npm ci` 与 `npm run build`，防止后台前端路由、类型和打包配置回归。
 - 当前不引入 RBAC，仍使用单一管理员 JWT 模型。
 
 ## 7. 已实现消息链路
@@ -393,7 +394,7 @@ SQL 文件位于 `doc/sql/`，当前包含 `schema.sql`、测试数据、Phase 1
 19. 验证搜索索引重建、搜索查询。
 20. 验证搜索内部接口经 Gateway 访问返回 403。
 
-GitHub Actions 当前包含 Maven Build、Full Chain E2E 与 `k6 Load & Chaos Tests (CI Mode)`。Full Chain E2E 使用一次性 schema/seed；CI k6 smoke 使用一次性测试用户生成与 Redis 秒杀库存预热，目标是防回归，不追求本地 Phase 23 极限 QPS。
+GitHub Actions 当前包含 Maven Build、Admin Web Build、Full Chain E2E 与 `k6 Load & Chaos Tests (CI Mode)`。Admin Web Build 以 Node.js 24 执行 `npm ci` 和 `npm run build`；Full Chain E2E 使用一次性 schema/seed；CI k6 smoke 使用一次性测试用户生成与 Redis 秒杀库存预热，目标是防回归，不追求本地 Phase 23 极限 QPS。
 
 ## 10. 压测脚本、集群架构与报告
 
