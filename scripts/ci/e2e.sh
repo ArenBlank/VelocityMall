@@ -382,6 +382,26 @@ CREATE TABLE pms_sku (
     KEY idx_spu_id (spu_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE sms_seckill_activity (
+    id BIGINT NOT NULL,
+    sku_id BIGINT NOT NULL,
+    spu_id BIGINT NOT NULL,
+    activity_name VARCHAR(128) NOT NULL,
+    seckill_price DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+    original_price DECIMAL(18,2) NOT NULL DEFAULT 0.00,
+    seckill_stock INT NOT NULL DEFAULT 0,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    status TINYINT NOT NULL DEFAULT 1,
+    version INT NOT NULL DEFAULT 0,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    KEY idx_sku_status_time (sku_id, status, start_time, end_time),
+    KEY idx_status_time (status, start_time, end_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE pms_stock_lock_log (
     id BIGINT NOT NULL,
     order_sn VARCHAR(64) NOT NULL,
@@ -504,6 +524,11 @@ INSERT INTO pms_sku
 (id, spu_id, sku_name, sku_code, price, stock, lock_stock, sale_count, cover_img, version, create_time, update_time, is_deleted)
 VALUES
     (2001, 1001, 'Velocity Phone Pro 512G', 'VM-PHONE-512G', 7999.00, 100, 0, 0, 'https://static.velocitymall.local/sku/2001.png', 0, NOW(), NOW(), 0);
+
+INSERT INTO sms_seckill_activity
+(id, sku_id, spu_id, activity_name, seckill_price, original_price, seckill_stock, start_time, end_time, status, version, create_time, update_time, is_deleted)
+VALUES
+    (23001, 2001, 1001, 'Velocity Phone Pro E2E Flash Sale', 4999.00, 7999.00, 100, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 1 YEAR), 1, 0, NOW(), NOW(), 0);
 
 INSERT INTO sms_coupon
 (id, name, amount, min_point, stock, limit_per_user, start_time, end_time, status, version, create_time, update_time, is_deleted)
