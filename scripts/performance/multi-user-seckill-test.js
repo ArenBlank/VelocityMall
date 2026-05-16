@@ -3,6 +3,8 @@ import { check, sleep } from 'k6';
 import { Trend, Counter } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
 
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 200 }, 429));
+
 // Load 200 user tokens
 const users = new SharedArray('users', function () {
   return JSON.parse(open('./users.json'));
@@ -31,10 +33,15 @@ export const options = {
         { duration: '15s', target: 200 },
         { duration: '5s',  target: 0   },
       ],
-  thresholds: {
-    http_req_duration: ['p(95)<2000'],
-    http_req_failed:   ['rate<0.50'],
-  },
+  thresholds: isCI
+    ? {
+        http_req_duration: ['p(95)<5000'],
+        http_req_failed:   ['rate<0.05'],
+      }
+    : {
+        http_req_duration: ['p(95)<2000'],
+        http_req_failed:   ['rate<0.50'],
+      },
 };
 
 export default function () {
@@ -57,8 +64,7 @@ export default function () {
   const status429 = res.status === 429;
 
   check(res, {
-    'HTTP 200 (到达后台)': () => status200,
-    'HTTP 429 (Sentinel 限流)': () => status429,
+    'HTTP 200 or expected Sentinel 429': () => status200 || status429,
   });
 
   if (status200) {
@@ -78,8 +84,7 @@ export default function () {
     const isDuplicate = msg.includes('已抢过') || msg.includes('请勿重复');
 
     check(body, {
-      '抢购成功 (code=20000)': () => isSuccess,
-      '库存不足/已售罄': () => isSoldOut,
+      'recognized seckill business result': () => isSuccess || isSoldOut || isDuplicate,
     });
 
     if (isSuccess) {

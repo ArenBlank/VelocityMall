@@ -405,14 +405,14 @@ jobs:
       - name: Run k6 Multi-User Seckill (CI mode)
         run: |
           cd scripts/performance
-          CI=true k6 run --summary-export=multi-user-summary.json multi-user-seckill-test.js
+          k6 run -e CI=true --summary-export=multi-user-summary.json multi-user-seckill-test.js
           echo "--- summary ---"
           python3 -c "import json; s=json.load(open('multi-user-summary.json')); m=s.get('metrics',{}); print(f'reqs={m.get(\"http_reqs\",{}).get(\"count\",\"?\")}, p95={m.get(\"http_req_duration\",{}).get(\"p(95)\",\"?\")}ms')"
 
       - name: Run k6 Chaos Spike (CI mode)
         run: |
           cd scripts/performance
-          CI=true k6 run --summary-export=chaos-summary.json chaos-spike-test.js
+          k6 run -e CI=true --summary-export=chaos-summary.json chaos-spike-test.js
           echo "--- summary ---"
           python3 -c "import json; s=json.load(open('chaos-summary.json')); m=s.get('metrics',{}); print(f'reqs={m.get(\"http_reqs\",{}).get(\"count\",\"?\")}, p95={m.get(\"http_req_duration\",{}).get(\"p(95)\",\"?\")}ms')"
 
