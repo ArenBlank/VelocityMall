@@ -166,7 +166,7 @@ export interface UserCouponVO {
 }
 
 export interface ReviewVO {
-  id: number;
+  id: string;
   skuId: number;
   spuId: number;
   rating: number;
@@ -185,4 +185,13 @@ export interface ReviewStatsVO {
   totalCount: number;
   goodCount: number;
   goodRate: number;
+}
+
+export interface ReviewReplyVO {
+  id: string;
+  reviewId: string;
+  userId: string;
+  content: string;
+  mine?: boolean;
+  createTime: string;
 }

@@ -1,5 +1,7 @@
 package com.velocitymall.review.model.vo;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +17,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ReviewVO {
 
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     private Long skuId;

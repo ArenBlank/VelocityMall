@@ -54,7 +54,7 @@
           <div class="stat-line"><span>地址</span><strong>{{ addressText }}</strong></div>
           <div class="stat-line"><span>物流</span><strong>{{ deliveryText }}</strong></div>
         </div>
-        <form v-if="order.status === 1" class="panel-body form-grid" @submit.prevent="submitDeliver">
+        <form v-if="canDeliverOrder && order.status === 1" class="panel-body form-grid" @submit.prevent="submitDeliver">
           <label class="field full">
             物流公司
             <input v-model.trim="deliveryCompany" required />
@@ -77,12 +77,16 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import SafeImage from '@/components/SafeImage.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { useAdminOrderStore } from '@/stores/adminOrderStore';
 import { formatTime, money, orderTypeText } from '@/utils/format';
 
 const route = useRoute();
+const auth = useAdminAuthStore();
 const store = useAdminOrderStore();
 const order = computed(() => store.current);
+const canDeliverOrder = computed(() => auth.hasPermission(AdminPermissions.ORDER_DELIVER));
 const deliveryCompany = ref('');
 const deliverySn = ref('');
 const message = ref('');

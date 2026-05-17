@@ -21,10 +21,19 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(optionalUserInterceptor)
-                .addPathPatterns("/api/v1/reviews/products/**");
+                .addPathPatterns(
+                        "/api/v1/reviews/products/**",
+                        "/api/v1/reviews/*/replies",
+                        "/api/v1/reviews/*/replies/**"
+                );
 
         registry.addInterceptor(userInterceptor)
                 .addPathPatterns("/api/v1/reviews/**")
-                .excludePathPatterns("/api/v1/reviews/products/**", "/error");
+                .excludePathPatterns(
+                        "/api/v1/reviews/products/**",
+                        "/api/v1/reviews/*/replies",
+                        "/api/v1/reviews/*/replies/**",
+                        "/error"
+                );
     }
 }

@@ -46,13 +46,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/api/v1/products/skus/*",
             "/api/v1/search/**",
             "/api/v1/categories/tree",
-            "/api/v1/reviews/products/**"
+            "/api/v1/reviews/products/**",
+            "/api/v1/reviews/*/replies"
     };
 
     private static final String[] POST_WHITE_LIST = {
             "/api/v1/users/register",
             "/api/v1/users/login",
-            "/api/v1/admin/login"
+            "/api/v1/admin/login",
+            "/api/v1/orders/pay/mock/callback",
+            "/api/v1/orders/refund/mock/callback"
     };
 
     private static final String[] BLACK_LIST = {
@@ -196,19 +199,16 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     }
 
     private boolean matchesGetWhiteList(String path) {
-        if (pathMatcher.match(GET_WHITE_LIST[0], path)) {
+        for (String pattern : GET_WHITE_LIST) {
+            if (!pathMatcher.match(pattern, path)) {
+                continue;
+            }
+            if ("/api/v1/products/skus/*".equals(pattern)) {
+                return isNumericSkuPath(path);
+            }
             return true;
         }
-        if (pathMatcher.match(GET_WHITE_LIST[1], path)) {
-            return isNumericSkuPath(path);
-        }
-        if (pathMatcher.match(GET_WHITE_LIST[2], path)) {
-            return true;
-        }
-        if (pathMatcher.match(GET_WHITE_LIST[3], path)) {
-            return true;
-        }
-        return pathMatcher.match(GET_WHITE_LIST[4], path);
+        return false;
     }
 
     private boolean matchesPostWhiteList(String path) {

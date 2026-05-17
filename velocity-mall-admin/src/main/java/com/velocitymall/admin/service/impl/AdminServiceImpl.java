@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.velocitymall.admin.client.OrderFeignClient;
 import com.velocitymall.admin.client.ProductFeignClient;
 import com.velocitymall.admin.client.SearchFeignClient;
+import com.velocitymall.admin.context.AdminContext;
 import com.velocitymall.admin.entity.Admin;
 import com.velocitymall.admin.entity.AdminCoupon;
 import com.velocitymall.admin.entity.AdminOrder;
@@ -17,7 +18,9 @@ import com.velocitymall.admin.mapper.AdminCouponMapper;
 import com.velocitymall.admin.mapper.AdminMapper;
 import com.velocitymall.admin.mapper.AdminOrderItemMapper;
 import com.velocitymall.admin.mapper.AdminOrderMapper;
+import com.velocitymall.admin.mapper.AdminPermissionMapper;
 import com.velocitymall.admin.mapper.AdminReviewMapper;
+import com.velocitymall.admin.mapper.AdminRoleMapper;
 import com.velocitymall.admin.mapper.AdminSeckillActivityMapper;
 import com.velocitymall.admin.mapper.AdminSkuMapper;
 import com.velocitymall.admin.mapper.AdminSpuMapper;
@@ -30,6 +33,7 @@ import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminOrderItemVO;
 import com.velocitymall.admin.model.vo.AdminOrderVO;
+import com.velocitymall.admin.model.vo.AdminProfileVO;
 import com.velocitymall.admin.model.vo.AdminRebuildIndexVO;
 import com.velocitymall.admin.model.vo.AdminReviewVO;
 import com.velocitymall.admin.model.vo.AdminSeckillActivityVO;
@@ -88,6 +92,8 @@ public class AdminServiceImpl implements AdminService {
     private final AdminCouponMapper adminCouponMapper;
     private final AdminReviewMapper adminReviewMapper;
     private final AdminSeckillActivityMapper adminSeckillActivityMapper;
+    private final AdminRoleMapper adminRoleMapper;
+    private final AdminPermissionMapper adminPermissionMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final ProductFeignClient productFeignClient;
     private final OrderFeignClient orderFeignClient;
@@ -112,13 +118,29 @@ public class AdminServiceImpl implements AdminService {
         }
 
         String token = generateAdminJwt(admin);
+        AdminProfileVO profile = buildAdminProfile(admin);
         log.info("管理员登录成功: {}", admin.getUsername());
         return AdminLoginVO.builder()
                 .token(token)
-                .adminId(admin.getId())
-                .username(admin.getUsername())
-                .realName(admin.getRealName())
+                .adminId(profile.getAdminId())
+                .username(profile.getUsername())
+                .realName(profile.getRealName())
+                .roles(profile.getRoles())
+                .permissions(profile.getPermissions())
                 .build();
+    }
+
+    @Override
+    public AdminProfileVO getCurrentAdminProfile() {
+        Long adminId = AdminContext.getAdminId();
+        if (adminId == null) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        Admin admin = adminMapper.selectById(adminId);
+        if (admin == null || admin.getStatus() == null || admin.getStatus() != STATUS_ENABLED) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED, "管理员不存在或已禁用");
+        }
+        return buildAdminProfile(admin);
     }
 
     @Override
@@ -761,5 +783,17 @@ public class AdminServiceImpl implements AdminService {
                 .setExpiration(expiration)
                 .signWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    private AdminProfileVO buildAdminProfile(Admin admin) {
+        List<String> roleCodes = adminRoleMapper.selectRoleCodesByAdminId(admin.getId());
+        List<String> permissionCodes = adminPermissionMapper.selectPermissionCodesByAdminId(admin.getId());
+        return AdminProfileVO.builder()
+                .adminId(String.valueOf(admin.getId()))
+                .username(admin.getUsername())
+                .realName(admin.getRealName())
+                .roles(roleCodes)
+                .permissions(permissionCodes)
+                .build();
     }
 }

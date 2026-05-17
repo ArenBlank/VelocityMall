@@ -5,7 +5,7 @@
         <h1>优惠券管理</h1>
         <p>维护可领取优惠券，C 端领券入口使用同一批数据。</p>
       </div>
-      <button class="primary-button" type="button" @click="newCoupon"><Plus :size="18" /> 新建优惠券</button>
+      <button v-if="canWriteCoupon" class="primary-button" type="button" @click="newCoupon"><Plus :size="18" /> 新建优惠券</button>
     </div>
     <form class="filters panel" @submit.prevent="load(1)">
       <label>
@@ -18,7 +18,7 @@
       </label>
       <button class="primary-button" type="submit">筛选</button>
     </form>
-    <div class="drawer-grid">
+    <div class="drawer-grid" :class="{ 'single-column': !canWriteCoupon }">
       <div class="panel">
         <table class="data-table">
           <thead>
@@ -42,8 +42,8 @@
               <td><StatusBadge type="coupon" :value="coupon.status" /></td>
               <td>
                 <div class="row-actions">
-                  <button class="ghost-button compact" type="button" @click="edit(coupon)">编辑</button>
-                  <button class="danger-button compact" type="button" @click="toggle(coupon)">
+                  <button v-if="canWriteCoupon" class="ghost-button compact" type="button" @click="edit(coupon)">编辑</button>
+                  <button v-if="canWriteCoupon" class="danger-button compact" type="button" @click="toggle(coupon)">
                     {{ coupon.status === 1 ? '停用' : '启用' }}
                   </button>
                 </div>
@@ -54,7 +54,7 @@
         <EmptyState v-if="!store.loading && records.length === 0" />
         <Pager v-if="store.page" :page="store.page.current" :pages="store.page.pages" :total="store.page.total" @change="load" />
       </div>
-      <aside class="panel">
+      <aside v-if="canWriteCoupon" class="panel">
         <div class="section-title"><h2>{{ editingId ? '编辑优惠券' : '新建优惠券' }}</h2></div>
         <form class="panel-body form-grid" @submit.prevent="save">
           <label class="field full">名称<input v-model.trim="form.name" required /></label>
@@ -85,11 +85,15 @@ import EmptyState from '@/components/EmptyState.vue';
 import Pager from '@/components/Pager.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import type { AdminCouponVO } from '@/api/types';
+import { AdminPermissions } from '@/constants/permissions';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { useAdminCouponStore } from '@/stores/adminCouponStore';
 import { formatTime, fromInputDateTime, money, toInputDateTime } from '@/utils/format';
 
+const auth = useAdminAuthStore();
 const store = useAdminCouponStore();
 const records = computed(() => store.page?.records || []);
+const canWriteCoupon = computed(() => auth.hasPermission(AdminPermissions.COUPON_WRITE));
 const status = ref('');
 const editingId = ref<number | null>(null);
 const message = ref('');

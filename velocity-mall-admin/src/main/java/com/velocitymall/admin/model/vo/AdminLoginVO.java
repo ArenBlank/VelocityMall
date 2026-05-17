@@ -1,5 +1,6 @@
 package com.velocitymall.admin.model.vo;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -13,9 +14,13 @@ public class AdminLoginVO {
 
     private String token;
 
-    private Long adminId;
+    private String adminId;
 
     private String username;
 
     private String realName;
+
+    private List<String> roles;
+
+    private List<String> permissions;
 }

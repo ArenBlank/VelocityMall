@@ -1,5 +1,5 @@
 import { request } from './http';
-import type { PageVO, ReviewStatsVO, ReviewVO } from './types';
+import type { PageVO, ReviewReplyVO, ReviewStatsVO, ReviewVO } from './types';
 
 export interface ReviewCreatePayload {
   orderSn: string;
@@ -35,7 +35,7 @@ export function getProductReviewStats(spuId: number) {
   });
 }
 
-export function interactReview(reviewId: number, interactionType: 1 | 2) {
+export function interactReview(reviewId: string | number, interactionType: 1 | 2) {
   return request<void>({
     url: `/api/v1/reviews/${reviewId}/interaction`,
     method: 'POST',
@@ -43,9 +43,35 @@ export function interactReview(reviewId: number, interactionType: 1 | 2) {
   });
 }
 
-export function deleteReview(reviewId: number) {
+export function deleteReview(reviewId: string | number) {
   return request<void>({
     url: `/api/v1/reviews/${reviewId}`,
+    method: 'DELETE'
+  });
+}
+
+export function listReviewReplies(reviewId: string | number, params: { page?: number; size?: number } = {}) {
+  return request<PageVO<ReviewReplyVO>>({
+    url: `/api/v1/reviews/${reviewId}/replies`,
+    method: 'GET',
+    params: {
+      page: params.page ?? 1,
+      size: params.size ?? 10
+    }
+  });
+}
+
+export function createReviewReply(reviewId: string | number, content: string) {
+  return request<void>({
+    url: `/api/v1/reviews/${reviewId}/replies`,
+    method: 'POST',
+    data: { content }
+  });
+}
+
+export function deleteReviewReply(reviewId: string | number, replyId: string | number) {
+  return request<void>({
+    url: `/api/v1/reviews/${reviewId}/replies/${replyId}`,
     method: 'DELETE'
   });
 }

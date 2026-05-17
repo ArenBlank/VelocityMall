@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { LogOut, MapPin, Search, ShoppingCart, Ticket, UserRound, Zap } from 'lucide-vue-next';
+import { LogOut, MapPin, Search, ShoppingBag, ShoppingCart, Ticket, UserRound, Zap } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 
@@ -16,10 +16,6 @@ const isAuthLayout = computed(() => route.meta.authLayout === true);
 const accountLabel = computed(() => authStore.user?.username || '登录/注册');
 const cartCount = computed(() => cartStore.totalQuantity);
 const searchKeyword = ref(String(route.query.keyword || ''));
-const seckillZoneTarget = computed(() => {
-  const activity = seckillActivityStore.mainActivity;
-  return activity ? `/products/${activity.skuId}` : '/';
-});
 
 watch(
   () => route.query.keyword,
@@ -107,7 +103,11 @@ watch(() => authStore.token, ensureBuyerDataLoaded);
 
     <nav class="category-nav clean-nav" aria-label="主导航">
       <RouterLink to="/">首页</RouterLink>
-      <RouterLink :to="seckillZoneTarget">
+      <RouterLink :to="{ name: 'normal-products' }">
+        <ShoppingBag :size="18" />
+        普通购买
+      </RouterLink>
+      <RouterLink :to="{ name: 'seckill-zone' }">
         <Zap :size="18" fill="currentColor" />
         秒杀专区
       </RouterLink>

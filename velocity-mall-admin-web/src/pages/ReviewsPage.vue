@@ -31,7 +31,7 @@
             <td>{{ review.userId }}<br /><span class="subtext">{{ review.orderSn }}</span></td>
             <td>赞 {{ review.likeCount }} · 踩 {{ review.dislikeCount }}</td>
             <td>{{ formatTime(review.createTime) }}</td>
-            <td><button class="danger-button compact" type="button" @click="remove(review.id)">删除</button></td>
+            <td><button v-if="canDeleteReview" class="danger-button compact" type="button" @click="remove(review.id)">删除</button></td>
           </tr>
         </tbody>
       </table>
@@ -46,11 +46,15 @@ import { computed, onMounted, reactive } from 'vue';
 import { Search } from 'lucide-vue-next';
 import EmptyState from '@/components/EmptyState.vue';
 import Pager from '@/components/Pager.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { useAdminReviewStore } from '@/stores/adminReviewStore';
 import { formatTime } from '@/utils/format';
 
+const auth = useAdminAuthStore();
 const store = useAdminReviewStore();
 const records = computed(() => store.page?.records || []);
+const canDeleteReview = computed(() => auth.hasPermission(AdminPermissions.REVIEW_DELETE));
 const filters = reactive({ spuId: null as number | null, keyword: '' });
 
 async function load(page = 1) {

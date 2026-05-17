@@ -5,7 +5,7 @@
         <h1>秒杀活动</h1>
         <p>配置 SKU 秒杀价、活动时间、秒杀库存，并可手动预热 Redis 库存。</p>
       </div>
-      <button class="primary-button" type="button" @click="newActivity"><Plus :size="18" /> 新建活动</button>
+      <button v-if="canWriteSeckill" class="primary-button" type="button" @click="newActivity"><Plus :size="18" /> 新建活动</button>
     </div>
 
     <form class="filters panel" @submit.prevent="load(1)">
@@ -27,7 +27,7 @@
       <button class="outline-button" type="button" @click="reset">重置</button>
     </form>
 
-    <div class="drawer-grid">
+    <div class="drawer-grid" :class="{ 'single-column': !canWriteSeckill }">
       <div class="panel">
         <table class="data-table">
           <thead>
@@ -51,9 +51,9 @@
               <td><StatusBadge type="activity" :value="activity.state" /></td>
               <td>
                 <div class="row-actions">
-                  <button class="ghost-button compact" type="button" @click="edit(activity)">编辑</button>
-                  <button class="ghost-button compact" type="button" @click="preheat(activity.id)">预热</button>
-                  <button class="danger-button compact" type="button" @click="toggle(activity)">
+                  <button v-if="canWriteSeckill" class="ghost-button compact" type="button" @click="edit(activity)">编辑</button>
+                  <button v-if="canPreheatSeckill" class="ghost-button compact" type="button" @click="preheat(activity.id)">预热</button>
+                  <button v-if="canWriteSeckill" class="danger-button compact" type="button" @click="toggle(activity)">
                     {{ activity.status === 1 ? '停用' : '启用' }}
                   </button>
                 </div>
@@ -65,7 +65,7 @@
         <Pager v-if="store.page" :page="store.page.current" :pages="store.page.pages" :total="store.page.total" @change="load" />
       </div>
 
-      <aside class="panel">
+      <aside v-if="canWriteSeckill" class="panel">
         <div class="section-title"><h2>{{ editingId ? '编辑活动' : '新建活动' }}</h2></div>
         <form class="panel-body form-grid" @submit.prevent="save">
           <label class="field">
@@ -130,11 +130,16 @@ import EmptyState from '@/components/EmptyState.vue';
 import Pager from '@/components/Pager.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import type { AdminSeckillActivityVO } from '@/api/types';
+import { AdminPermissions } from '@/constants/permissions';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { useAdminSeckillStore } from '@/stores/adminSeckillStore';
 import { formatTime, fromInputDateTime, money, toInputDateTime } from '@/utils/format';
 
+const auth = useAdminAuthStore();
 const store = useAdminSeckillStore();
 const records = computed(() => store.page?.records || []);
+const canWriteSeckill = computed(() => auth.hasPermission(AdminPermissions.SECKILL_WRITE));
+const canPreheatSeckill = computed(() => auth.hasPermission(AdminPermissions.SECKILL_PREHEAT));
 const filters = reactive({ skuId: null as number | null, state: '' });
 const editingId = ref<number | null>(null);
 const message = ref('');

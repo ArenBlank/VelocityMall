@@ -9,11 +9,11 @@
     </div>
 
     <div v-if="store.loading" class="panel"><div class="empty-state">商品详情加载中...</div></div>
-    <div v-else-if="spu" class="detail-grid">
+    <div v-else-if="spu" class="detail-grid" :class="{ 'single-column': !canWriteProducts }">
       <div class="panel">
         <div class="section-title">
           <h2>SKU 列表</h2>
-          <button class="primary-button" type="button" @click="newSku"><Plus :size="17" /> 新建 SKU</button>
+          <button v-if="canWriteProducts" class="primary-button" type="button" @click="newSku"><Plus :size="17" /> 新建 SKU</button>
         </div>
         <table class="data-table">
           <thead>
@@ -41,8 +41,8 @@
               <td>{{ sku.saleCount }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="ghost-button compact" type="button" @click="editSku(sku)">编辑</button>
-                  <label class="ghost-button compact file-button">
+                  <button v-if="canWriteProducts" class="ghost-button compact" type="button" @click="editSku(sku)">编辑</button>
+                  <label v-if="canWriteProducts" class="ghost-button compact file-button">
                     上传封面
                     <input type="file" accept="image/*" @change="uploadCover(sku.skuId, $event)" />
                   </label>
@@ -54,7 +54,7 @@
         <EmptyState v-if="spu.skuList.length === 0" title="暂无 SKU" description="请在右侧创建第一个 SKU。" />
       </div>
 
-      <aside class="panel">
+      <aside v-if="canWriteProducts" class="panel">
         <div class="section-title">
           <h2>SPU 信息</h2>
           <StatusBadge type="publish" :value="spu.publishStatus" />
@@ -129,16 +129,20 @@ import { LoaderCircle, Plus } from 'lucide-vue-next';
 import EmptyState from '@/components/EmptyState.vue';
 import SafeImage from '@/components/SafeImage.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import type { AdminSkuVO } from '@/api/types';
 import { useAdminProductStore } from '@/stores/adminProductStore';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { money } from '@/utils/format';
 
 const route = useRoute();
 const store = useAdminProductStore();
+const auth = useAdminAuthStore();
 const message = ref('');
 const error = ref('');
 const skuEditingId = ref<number | null>(null);
 const spu = computed(() => store.current);
+const canWriteProducts = computed(() => auth.hasPermission(AdminPermissions.PRODUCT_WRITE));
 
 const spuForm = reactive({ name: '', categoryId: 1, description: '', publishStatus: 1 });
 const skuForm = reactive({ spuId: 0, skuName: '', skuCode: '', price: 0, stock: 0, coverImg: '' });

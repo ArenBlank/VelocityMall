@@ -12,10 +12,14 @@ import com.velocitymall.common.result.ResultCode;
 import com.velocitymall.review.client.OrderFeignClient;
 import com.velocitymall.review.entity.ProductReview;
 import com.velocitymall.review.entity.ReviewInteraction;
+import com.velocitymall.review.entity.ReviewReply;
 import com.velocitymall.review.mapper.ProductReviewMapper;
 import com.velocitymall.review.mapper.ReviewInteractionMapper;
+import com.velocitymall.review.mapper.ReviewReplyMapper;
 import com.velocitymall.review.model.dto.ReviewCreateDTO;
 import com.velocitymall.review.model.dto.ReviewInteractionDTO;
+import com.velocitymall.review.model.dto.ReviewReplyCreateDTO;
+import com.velocitymall.review.model.vo.ReviewReplyVO;
 import com.velocitymall.review.model.vo.ReviewStatsVO;
 import com.velocitymall.review.model.vo.ReviewVO;
 import com.velocitymall.review.service.ReviewService;
@@ -71,6 +75,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final ProductReviewMapper productReviewMapper;
 
     private final ReviewInteractionMapper reviewInteractionMapper;
+
+    private final ReviewReplyMapper reviewReplyMapper;
 
     private final OrderFeignClient orderFeignClient;
 
@@ -146,6 +152,62 @@ public class ReviewServiceImpl implements ReviewService {
             throw new BusinessException(ResultCode.BIZ_WARNING, "评价不存在");
         }
         evictReviewStatsCache(review.getSpuId());
+    }
+
+    @Override
+    public PageVO<ReviewReplyVO> listReviewReplies(Long reviewId, Long page, Long size) {
+        validatePage(page, size);
+        ensureReviewExists(reviewId);
+        Page<ReviewReply> replyPage = new Page<>(page, size);
+        LambdaQueryWrapper<ReviewReply> wrapper = new LambdaQueryWrapper<ReviewReply>()
+                .eq(ReviewReply::getReviewId, reviewId)
+                .orderByAsc(ReviewReply::getCreateTime);
+        Page<ReviewReply> resultPage = reviewReplyMapper.selectPage(replyPage, wrapper);
+        List<ReviewReplyVO> records = resultPage.getRecords().stream()
+                .map(this::toReviewReplyVO)
+                .toList();
+        return new PageVO<>(
+                resultPage.getCurrent(),
+                resultPage.getSize(),
+                resultPage.getTotal(),
+                resultPage.getPages(),
+                records
+        );
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void createReviewReply(Long reviewId, ReviewReplyCreateDTO dto) {
+        Long userId = getCurrentUserId();
+        ensureReviewExists(reviewId);
+        ReviewReply reply = ReviewReply.builder()
+                .reviewId(reviewId)
+                .userId(userId)
+                .content(dto.getContent().trim())
+                .build();
+        reviewReplyMapper.insert(reply);
+        int affectedRows = productReviewMapper.increaseReplyCount(reviewId);
+        if (affectedRows == 0) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "评价不存在");
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteReviewReply(Long reviewId, Long replyId) {
+        Long userId = getCurrentUserId();
+        ReviewReply reply = reviewReplyMapper.selectById(replyId);
+        if (reply == null || !Objects.equals(reviewId, reply.getReviewId())) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "回复不存在");
+        }
+        if (!Objects.equals(userId, reply.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权删除该回复");
+        }
+        int deletedRows = reviewReplyMapper.deleteById(replyId);
+        if (deletedRows == 0) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "回复不存在");
+        }
+        productReviewMapper.decreaseReplyCount(reviewId);
     }
 
     @Override
@@ -239,6 +301,14 @@ public class ReviewServiceImpl implements ReviewService {
                 && !Integer.valueOf(INTERACTION_TYPE_DISLIKE).equals(interactionType)) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "互动类型非法");
         }
+    }
+
+    private ProductReview ensureReviewExists(Long reviewId) {
+        ProductReview review = productReviewMapper.selectById(reviewId);
+        if (review == null) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "评价不存在");
+        }
+        return review;
     }
 
     private void createFirstInteraction(Long reviewId, Long userId, Integer interactionType) {
@@ -419,6 +489,18 @@ public class ReviewServiceImpl implements ReviewService {
                 .currentInteractionType(currentInteractionType == null ? NO_INTERACTION : currentInteractionType)
                 .mine(Objects.equals(currentUserId, review.getUserId()))
                 .createTime(review.getCreateTime())
+                .build();
+    }
+
+    private ReviewReplyVO toReviewReplyVO(ReviewReply reply) {
+        Long currentUserId = UserContext.getUserId();
+        return ReviewReplyVO.builder()
+                .id(reply.getId())
+                .reviewId(reply.getReviewId())
+                .userId(reply.getUserId())
+                .content(reply.getContent())
+                .mine(Objects.equals(currentUserId, reply.getUserId()))
+                .createTime(reply.getCreateTime())
                 .build();
     }
 }

@@ -19,6 +19,9 @@ public interface ProductReviewMapper extends BaseMapper<ProductReview> {
     @Update("UPDATE oms_product_review SET dislike_count = dislike_count + 1 WHERE id = #{reviewId} AND is_deleted = 0")
     int increaseDislikeCount(@Param("reviewId") Long reviewId);
 
+    @Update("UPDATE oms_product_review SET reply_count = reply_count + 1 WHERE id = #{reviewId} AND is_deleted = 0")
+    int increaseReplyCount(@Param("reviewId") Long reviewId);
+
     @Update("""
             UPDATE oms_product_review
             SET like_count = like_count - 1
@@ -36,6 +39,15 @@ public interface ProductReviewMapper extends BaseMapper<ProductReview> {
               AND is_deleted = 0
             """)
     int decreaseDislikeCount(@Param("reviewId") Long reviewId);
+
+    @Update("""
+            UPDATE oms_product_review
+            SET reply_count = reply_count - 1
+            WHERE id = #{reviewId}
+              AND reply_count > 0
+              AND is_deleted = 0
+            """)
+    int decreaseReplyCount(@Param("reviewId") Long reviewId);
 
     @Update("""
             UPDATE oms_product_review

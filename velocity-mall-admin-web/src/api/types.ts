@@ -8,9 +8,72 @@ export interface PageVO<T> {
 
 export interface AdminLoginVO {
   token: string;
-  adminId: number;
+  adminId: string;
   username: string;
   realName: string;
+  roles: string[];
+  permissions: string[];
+}
+
+export interface AdminProfileVO {
+  adminId: string;
+  username: string;
+  realName: string;
+  roles: string[];
+  permissions: string[];
+}
+
+export interface AdminPermissionVO {
+  id: string;
+  permissionCode: string;
+  permissionName: string;
+  resource: string;
+  action: string;
+  description?: string;
+  status: number;
+}
+
+export interface AdminRoleVO {
+  id: string;
+  roleCode: string;
+  roleName: string;
+  description?: string;
+  status: number;
+  permissions: AdminPermissionVO[];
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface AdminUserVO {
+  adminId: string;
+  username: string;
+  realName?: string;
+  status: number;
+  roles: AdminRoleVO[];
+  createTime?: string;
+  updateTime?: string;
+}
+
+export interface AdminUserCreateRequest {
+  username: string;
+  password: string;
+  realName?: string;
+  status: number;
+  roleIds: string[];
+}
+
+export interface AdminUserUpdateRequest {
+  realName?: string;
+  status: number;
+  roleIds: string[];
+}
+
+export interface AdminRoleRequest {
+  roleCode: string;
+  roleName: string;
+  description?: string;
+  status: number;
+  permissionIds: string[];
 }
 
 export interface AdminSkuVO {

@@ -141,7 +141,9 @@ a {
 .row-actions,
 .form-actions,
 .pager,
-.field-row {
+.field-row,
+.tab-switch,
+.tag-list {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -275,6 +277,51 @@ label.field,
   padding: 0 10px;
 }
 
+.tab-switch {
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.tab-switch button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: transparent;
+  color: #5d6675;
+  font-weight: 800;
+}
+
+.tab-switch button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tag-list {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag.muted-tag {
+  background: #eef1f5;
+  color: #5f6875;
+}
+
 .data-table {
   width: 100%;
   min-width: 760px;
@@ -394,6 +441,11 @@ label.field,
   gap: 18px;
 }
 
+.drawer-grid.single-column,
+.detail-grid.single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .drawer-grid > .panel,
 .detail-grid > .panel {
   overflow-x: auto;
@@ -413,6 +465,55 @@ label.field,
 
 .field.full {
   grid-column: 1 / -1;
+}
+
+.checkbox-list {
+  display: grid;
+  gap: 8px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.checkbox-item input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.checkbox-item span {
+  display: grid;
+  gap: 3px;
+}
+
+.checkbox-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.permission-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-group {
+  display: grid;
+  gap: 8px;
+}
+
+.permission-group h3 {
+  margin: 0;
+  color: #3a4250;
+  font-size: 14px;
 }
 
 .form-actions.field {

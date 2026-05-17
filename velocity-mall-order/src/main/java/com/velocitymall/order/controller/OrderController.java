@@ -4,6 +4,7 @@ import com.velocitymall.common.result.Result;
 import com.velocitymall.common.model.vo.OrderDetailVO;
 import com.velocitymall.common.model.vo.PageVO;
 import com.velocitymall.common.model.vo.SeckillResultVO;
+import com.velocitymall.order.model.dto.MockPaymentCallbackDTO;
 import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.vo.OrderVO;
 import com.velocitymall.order.service.OrderService;
@@ -123,6 +124,18 @@ public class OrderController {
     }
 
     /**
+     * Mock third-party payment callback.
+     *
+     * @param callback signed callback payload
+     * @return success result
+     */
+    @PostMapping("/pay/mock/callback")
+    public Result<Void> mockPaymentCallback(@Valid @RequestBody MockPaymentCallbackDTO callback) {
+        orderService.handleMockPaymentCallback(callback);
+        return Result.success();
+    }
+
+    /**
      * Mock refund for a paid order.
      *
      * @param orderSn order number
@@ -134,6 +147,18 @@ public class OrderController {
             @PathVariable("order-sn") String orderSn
     ) {
         orderService.mockRefund(orderSn);
+        return Result.success();
+    }
+
+    /**
+     * Mock third-party refund callback.
+     *
+     * @param callback signed callback payload
+     * @return success result
+     */
+    @PostMapping("/refund/mock/callback")
+    public Result<Void> mockRefundCallback(@Valid @RequestBody MockPaymentCallbackDTO callback) {
+        orderService.handleMockRefundCallback(callback);
         return Result.success();
     }
 

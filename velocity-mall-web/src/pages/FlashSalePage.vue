@@ -47,6 +47,7 @@ const skuId = computed(() => {
   const rawSkuId = Number(route.params.skuId);
   return Number.isFinite(rawSkuId) && rawSkuId > 0 ? rawSkuId : 0;
 });
+const isSeckillRoute = computed(() => route.name === 'seckill-detail');
 const activity = computed(() => seckillActivityStore.activityBySkuId(skuId.value));
 const startAt = computed(() => new Date(activity.value?.startTime || now.value).getTime());
 const endAt = computed(() => new Date(activity.value?.endTime || now.value).getTime());
@@ -78,7 +79,11 @@ const galleryImages = computed(() => {
 });
 const hasMultipleGalleryImages = computed(() => galleryImages.value.length > 1);
 const currentImage = computed(() => galleryImages.value[activeImageIndex.value] || productImage.value);
-const availableStock = computed(() => activity.value?.remainingStock ?? productStore.sku?.availableStock ?? null);
+const availableStock = computed(() =>
+  isSeckillRoute.value
+    ? activity.value?.remainingStock ?? productStore.sku?.availableStock ?? null
+    : productStore.sku?.availableStock ?? activity.value?.remainingStock ?? null
+);
 const saleCount = computed(() => searchRecord.value?.saleCount ?? 0);
 const stockText = computed(() => {
   if (productStore.loading && !productStore.sku) {
@@ -93,13 +98,19 @@ const stockSubText = computed(() => (productStore.sku ? '库存信息已更新' 
 const description = computed(() => productStore.spu?.description || '商品描述暂未同步');
 const regularPrice = computed(() => productStore.sku?.price ?? activity.value?.originalPrice ?? 0);
 const seckillPrice = computed(() => activity.value?.seckillPrice ?? 0);
+const displayPrice = computed(() =>
+  isSeckillRoute.value && activity.value ? seckillPrice.value : regularPrice.value
+);
+const priceLabel = computed(() => (isSeckillRoute.value && activity.value ? '秒杀价' : '普通价'));
 const realSkuList = computed<SkuVO[]>(() => {
   if (productStore.spu?.skuList?.length) {
     return productStore.spu.skuList;
   }
   return productStore.sku ? [productStore.sku] : [];
 });
-const showResultPanel = computed(() => Boolean(activity.value) && seckillStore.status !== 'READY' && !isBeforeStart.value);
+const showResultPanel = computed(() =>
+  isSeckillRoute.value && Boolean(activity.value) && seckillStore.status !== 'READY' && !isBeforeStart.value
+);
 const spuIdForReviews = computed(() => productStore.sku?.spuId || productStore.spu?.spuId || activity.value?.spuId || 0);
 
 const currentStatus = computed<DetailStatus>(() => {
@@ -191,6 +202,10 @@ async function browseProducts() {
   await router.push('/');
 }
 
+async function goCart() {
+  await router.push('/cart');
+}
+
 async function handleAddToCart() {
   if (!skuId.value || addingCart.value) {
     return;
@@ -209,7 +224,7 @@ async function handleAddToCart() {
 
 async function chooseSku(targetSkuId: number) {
   if (targetSkuId !== skuId.value) {
-    await router.push(`/products/${targetSkuId}`);
+    await router.push(isSeckillRoute.value ? `/seckill/${targetSkuId}` : `/products/${targetSkuId}`);
   }
 }
 
@@ -241,6 +256,7 @@ onUnmounted(() => {
 <template>
   <main class="product-page">
     <FlashRibbon
+      v-if="isSeckillRoute"
       :sale-count="saleCount"
       :available-stock="activity?.remainingStock ?? availableStock ?? undefined"
       :loading="productStore.loading || seckillActivityStore.loading"
@@ -286,7 +302,7 @@ onUnmounted(() => {
 
       <section class="product-info detail-info">
         <div class="tag-row compact-tags">
-          <span>秒杀 SKU {{ skuId }}</span>
+          <span>{{ isSeckillRoute ? '秒杀 SKU' : '普通 SKU' }} {{ skuId }}</span>
           <span>{{ productStore.loading ? '信息更新中' : '信息已更新' }}</span>
         </div>
         <h1>{{ productTitle }}</h1>
@@ -295,9 +311,9 @@ onUnmounted(() => {
 
         <div class="price-block detail-price">
           <span class="currency">¥</span>
-          <strong>{{ seckillPrice }}</strong>
-          <em>秒杀价</em>
-          <del>{{ money(regularPrice) }}</del>
+          <strong>{{ displayPrice }}</strong>
+          <em>{{ priceLabel }}</em>
+          <del v-if="isSeckillRoute && regularPrice > displayPrice">{{ money(regularPrice) }}</del>
         </div>
 
         <div class="sync-row">
@@ -307,10 +323,15 @@ onUnmounted(() => {
             <strong>{{ stockText }}</strong>
             <span>{{ stockSubText }}</span>
           </div>
-          <div class="sync-card">
+          <div v-if="isSeckillRoute" class="sync-card">
             <Clock3 :size="18" />
             <strong>{{ countdown[0] }} : {{ countdown[1] }} : {{ countdown[2] }}</strong>
             <span>{{ isBeforeStart ? '距开始' : '距结束' }}</span>
+          </div>
+          <div v-else class="sync-card">
+            <ShoppingCart :size="18" />
+            <strong>普通订单</strong>
+            <span>加入购物车后统一结算</span>
           </div>
         </div>
 
@@ -347,7 +368,32 @@ onUnmounted(() => {
         </dl>
       </section>
 
-      <aside class="seckill-panel contract-panel">
+      <aside v-if="!isSeckillRoute" class="seckill-panel contract-panel">
+        <header>
+          <h2><ShoppingCart :size="25" /> 普通购买</h2>
+          <span>{{ productStore.loading ? '信息更新中' : '信息已更新' }}</span>
+        </header>
+
+        <div class="queue-card contract-queue">
+          <p>当前可售库存</p>
+          <strong><PackageCheck :size="38" fill="currentColor" /> {{ availableStock ?? '-' }} <span>件</span></strong>
+          <small>加入购物车后可在购物车提交普通订单，并进入模拟支付。</small>
+        </div>
+
+        <button class="buy-button detail-buy-button" type="button" :disabled="addingCart || productStore.loading" @click="handleAddToCart">
+          <LoaderCircle v-if="addingCart" :size="25" class="spin" />
+          <ShoppingCart v-else :size="25" />
+          加入购物车
+        </button>
+        <button class="cart-secondary-button" type="button" @click="goCart">
+          <ShoppingCart :size="20" />
+          去购物车结算
+        </button>
+        <p v-if="cartMessage" class="cart-inline-message">{{ cartMessage }}</p>
+        <small class="limit-text">普通订单从购物车提交，支持地址、优惠券和模拟支付。</small>
+      </aside>
+
+      <aside v-else class="seckill-panel contract-panel">
         <header>
           <h2><Zap :size="25" fill="currentColor" /> 秒杀通道</h2>
           <span>{{ productStore.loading ? '信息更新中' : '信息已更新' }}</span>
@@ -431,22 +477,22 @@ onUnmounted(() => {
       </article>
 
       <article class="detail-section guarantee-section">
-        <h2>抢购流程</h2>
+        <h2>{{ isSeckillRoute ? '抢购流程' : '购物车下单流程' }}</h2>
         <div class="guarantee-grid">
           <div>
             <PackageCheck :size="31" />
-            <strong>确认库存</strong>
-            <span>成功后进入排队状态</span>
+            <strong>{{ isSeckillRoute ? '确认库存' : '加入购物车' }}</strong>
+            <span>{{ isSeckillRoute ? '成功后进入排队状态' : '选择商品后统一结算' }}</span>
           </div>
           <div>
             <ListChecks :size="31" />
             <strong>生成订单</strong>
-            <span>生成订单后跳转支付</span>
+            <span>{{ isSeckillRoute ? '生成订单后跳转支付' : '提交地址和优惠券后生成订单' }}</span>
           </div>
           <div>
             <ShieldCheck :size="31" />
-            <strong>重复提交保护</strong>
-            <span>按钮提交后立即锁定</span>
+            <strong>{{ isSeckillRoute ? '重复提交保护' : '模拟支付' }}</strong>
+            <span>{{ isSeckillRoute ? '按钮提交后立即锁定' : '订单页完成支付和状态流转' }}</span>
           </div>
         </div>
       </article>

@@ -1,5 +1,7 @@
 package com.velocitymall.admin.controller;
 
+import com.velocitymall.admin.annotation.RequireAdminPermission;
+import com.velocitymall.admin.constant.AdminPermissionCodes;
 import com.velocitymall.admin.model.dto.AdminCouponRequest;
 import com.velocitymall.admin.model.dto.AdminLoginDTO;
 import com.velocitymall.admin.model.dto.AdminSeckillActivityRequest;
@@ -9,6 +11,7 @@ import com.velocitymall.admin.model.dto.AdminStatusRequest;
 import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminOrderVO;
+import com.velocitymall.admin.model.vo.AdminProfileVO;
 import com.velocitymall.admin.model.vo.AdminRebuildIndexVO;
 import com.velocitymall.admin.model.vo.AdminReviewVO;
 import com.velocitymall.admin.model.vo.AdminSeckillActivityVO;
@@ -49,7 +52,13 @@ public class AdminController {
         return Result.success(adminService.login(dto.getUsername(), dto.getPassword()));
     }
 
+    @GetMapping("/me")
+    public Result<AdminProfileVO> getCurrentAdminProfile() {
+        return Result.success(adminService.getCurrentAdminProfile());
+    }
+
     @GetMapping("/products/spus")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_READ)
     public Result<PageVO<AdminSpuVO>> listSpus(
             @RequestParam(value = "page", defaultValue = "1") @Min(1) Long page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) Long size,
@@ -60,16 +69,19 @@ public class AdminController {
     }
 
     @GetMapping("/products/spus/{spu-id}")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_READ)
     public Result<AdminSpuVO> getSpu(@PathVariable("spu-id") @Min(1) Long spuId) {
         return Result.success(adminService.getSpu(spuId));
     }
 
     @PostMapping("/products/spus")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<AdminSpuVO> createSpu(@Valid @RequestBody AdminSpuRequest request) {
         return Result.success(adminService.createSpu(request));
     }
 
     @PutMapping("/products/spus/{spu-id}")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<AdminSpuVO> updateSpu(
             @PathVariable("spu-id") @Min(1) Long spuId,
             @Valid @RequestBody AdminSpuRequest request
@@ -78,6 +90,7 @@ public class AdminController {
     }
 
     @PutMapping("/products/spus/{spu-id}/status")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<Void> updateSpuStatus(
             @NotNull @Min(1) @PathVariable("spu-id") Long spuId,
             @NotNull @RequestParam("action") String action
@@ -93,11 +106,13 @@ public class AdminController {
     }
 
     @PostMapping("/products/skus")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<AdminSkuVO> createSku(@Valid @RequestBody AdminSkuRequest request) {
         return Result.success(adminService.createSku(request));
     }
 
     @PutMapping("/products/skus/{sku-id}")
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<AdminSkuVO> updateSku(
             @PathVariable("sku-id") @Min(1) Long skuId,
             @Valid @RequestBody AdminSkuRequest request
@@ -109,6 +124,7 @@ public class AdminController {
             value = "/products/skus/{sku-id}/cover",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
+    @RequireAdminPermission(AdminPermissionCodes.PRODUCT_WRITE)
     public Result<FileUploadVO> uploadSkuCover(
             @NotNull @Min(1) @PathVariable("sku-id") Long skuId,
             @RequestParam("file") MultipartFile file
@@ -117,6 +133,7 @@ public class AdminController {
     }
 
     @GetMapping("/orders")
+    @RequireAdminPermission(AdminPermissionCodes.ORDER_READ)
     public Result<PageVO<AdminOrderVO>> listOrders(
             @RequestParam(value = "page", defaultValue = "1") @Min(1) Long page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) Long size,
@@ -129,11 +146,13 @@ public class AdminController {
     }
 
     @GetMapping("/orders/{order-sn}")
+    @RequireAdminPermission(AdminPermissionCodes.ORDER_READ)
     public Result<AdminOrderVO> getOrder(@PathVariable("order-sn") @NotBlank String orderSn) {
         return Result.success(adminService.getAdminOrder(orderSn));
     }
 
     @PostMapping("/orders/{order-sn}/deliver")
+    @RequireAdminPermission(AdminPermissionCodes.ORDER_DELIVER)
     public Result<Void> deliverOrder(
             @NotBlank @PathVariable("order-sn") String orderSn,
             @NotBlank @RequestParam("deliveryCompany") String deliveryCompany,
@@ -144,6 +163,7 @@ public class AdminController {
     }
 
     @GetMapping("/seckill/activities")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_READ)
     public Result<PageVO<AdminSeckillActivityVO>> listSeckillActivities(
             @RequestParam(value = "page", defaultValue = "1") @Min(1) Long page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) Long size,
@@ -154,6 +174,7 @@ public class AdminController {
     }
 
     @PostMapping("/seckill/activities")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_WRITE)
     public Result<AdminSeckillActivityVO> createSeckillActivity(
             @Valid @RequestBody AdminSeckillActivityRequest request
     ) {
@@ -161,6 +182,7 @@ public class AdminController {
     }
 
     @PutMapping("/seckill/activities/{id}")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_WRITE)
     public Result<AdminSeckillActivityVO> updateSeckillActivity(
             @PathVariable("id") @Min(1) Long id,
             @Valid @RequestBody AdminSeckillActivityRequest request
@@ -169,6 +191,7 @@ public class AdminController {
     }
 
     @PutMapping("/seckill/activities/{id}/status")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_WRITE)
     public Result<AdminSeckillActivityVO> updateSeckillActivityStatus(
             @PathVariable("id") @Min(1) Long id,
             @Valid @RequestBody AdminStatusRequest request
@@ -177,11 +200,13 @@ public class AdminController {
     }
 
     @PostMapping("/seckill/activities/{id}/preheat")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_PREHEAT)
     public Result<AdminSeckillActivityVO> preheatSeckillActivity(@PathVariable("id") @Min(1) Long id) {
         return Result.success(adminService.preheatSeckillActivity(id));
     }
 
     @GetMapping("/coupons")
+    @RequireAdminPermission(AdminPermissionCodes.COUPON_READ)
     public Result<PageVO<AdminCouponVO>> listCoupons(
             @RequestParam(value = "page", defaultValue = "1") @Min(1) Long page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) Long size,
@@ -191,11 +216,13 @@ public class AdminController {
     }
 
     @PostMapping("/coupons")
+    @RequireAdminPermission(AdminPermissionCodes.COUPON_WRITE)
     public Result<AdminCouponVO> createCoupon(@Valid @RequestBody AdminCouponRequest request) {
         return Result.success(adminService.createCoupon(request));
     }
 
     @PutMapping("/coupons/{id}")
+    @RequireAdminPermission(AdminPermissionCodes.COUPON_WRITE)
     public Result<AdminCouponVO> updateCoupon(
             @PathVariable("id") @Min(1) Long id,
             @Valid @RequestBody AdminCouponRequest request
@@ -204,6 +231,7 @@ public class AdminController {
     }
 
     @PutMapping("/coupons/{id}/status")
+    @RequireAdminPermission(AdminPermissionCodes.COUPON_WRITE)
     public Result<AdminCouponVO> updateCouponStatus(
             @PathVariable("id") @Min(1) Long id,
             @Valid @RequestBody AdminStatusRequest request
@@ -212,6 +240,7 @@ public class AdminController {
     }
 
     @GetMapping("/reviews")
+    @RequireAdminPermission(AdminPermissionCodes.REVIEW_READ)
     public Result<PageVO<AdminReviewVO>> listReviews(
             @RequestParam(value = "page", defaultValue = "1") @Min(1) Long page,
             @RequestParam(value = "size", defaultValue = "10") @Min(1) Long size,
@@ -222,12 +251,14 @@ public class AdminController {
     }
 
     @DeleteMapping("/reviews/{id}")
+    @RequireAdminPermission(AdminPermissionCodes.REVIEW_DELETE)
     public Result<Void> deleteReview(@PathVariable("id") @Min(1) Long id) {
         adminService.deleteReview(id);
         return Result.success();
     }
 
     @PostMapping("/search/skus/rebuild-index")
+    @RequireAdminPermission(AdminPermissionCodes.SYSTEM_REBUILD)
     public Result<AdminRebuildIndexVO> rebuildSkuIndex() {
         return Result.success(adminService.rebuildSkuIndex());
     }

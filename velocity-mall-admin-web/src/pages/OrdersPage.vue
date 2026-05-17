@@ -76,7 +76,7 @@
             <td>
               <div class="row-actions">
                 <RouterLink class="ghost-button compact" :to="`/orders/${order.orderSn}`">详情</RouterLink>
-                <button v-if="order.status === 1" class="primary-button compact" type="button" @click="openDeliver(order.orderSn)">
+                <button v-if="canDeliverOrder && order.status === 1" class="primary-button compact" type="button" @click="openDeliver(order.orderSn)">
                   发货
                 </button>
               </div>
@@ -94,7 +94,7 @@
       />
     </div>
 
-    <div v-if="deliverForm.orderSn" class="panel panel-body deliver-panel">
+    <div v-if="canDeliverOrder && deliverForm.orderSn" class="panel panel-body deliver-panel">
       <h2>订单发货</h2>
       <p class="muted">订单号：{{ deliverForm.orderSn }}</p>
       <form class="form-grid" @submit.prevent="submitDeliver">
@@ -124,15 +124,19 @@ import EmptyState from '@/components/EmptyState.vue';
 import Pager from '@/components/Pager.vue';
 import SafeImage from '@/components/SafeImage.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import type { AdminOrderVO } from '@/api/types';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { useAdminOrderStore } from '@/stores/adminOrderStore';
 import { formatTime, money, orderTypeText } from '@/utils/format';
 
 const store = useAdminOrderStore();
+const auth = useAdminAuthStore();
 const route = useRoute();
 const router = useRouter();
 const currentPage = computed(() => Number(route.query.page || 1));
 const records = computed(() => store.page?.records || []);
+const canDeliverOrder = computed(() => auth.hasPermission(AdminPermissions.ORDER_DELIVER));
 const feedback = ref('');
 const localError = ref('');
 

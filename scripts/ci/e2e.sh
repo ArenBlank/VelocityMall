@@ -12,6 +12,10 @@ USER_ID=""
 USER_AUTH_HEADER=""
 ADMIN_TOKEN=""
 ADMIN_AUTH_HEADER=""
+OPERATOR_TOKEN=""
+OPERATOR_AUTH_HEADER=""
+VIEWER_TOKEN=""
+VIEWER_AUTH_HEADER=""
 
 declare -a APP_PIDS=()
 
@@ -253,6 +257,102 @@ for part in sys.argv[2].split("."):
     except (ValueError, TypeError):
         value = value[part]
 print(value)
+PY
+}
+
+json_find_id_by_field() {
+  local file=$1
+  local path=$2
+  local field=$3
+  local expected=$4
+
+  python - "${file}" "${path}" "${field}" "${expected}" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    value = json.load(f)
+for part in sys.argv[2].split("."):
+    value = value[part]
+for item in value:
+    if str(item.get(sys.argv[3])) == sys.argv[4]:
+        print(item["id"])
+        raise SystemExit(0)
+raise SystemExit(f"Could not find {sys.argv[3]}={sys.argv[4]} at {sys.argv[2]}")
+PY
+}
+
+mock_callback_json() {
+  local transaction_type=$1
+  local order_sn=$2
+  local request_no=$3
+  local trade_no=$4
+  local amount=$5
+  local pay_type=$6
+  local status=$7
+
+  python - "${transaction_type}" "${order_sn}" "${request_no}" "${trade_no}" "${amount}" "${pay_type}" "${status}" <<'PY'
+import decimal
+import hashlib
+import hmac
+import json
+import sys
+import time
+import uuid
+
+secret = "velocity-mall-mock-payment-secret"
+transaction_type, order_sn, request_no, trade_no, amount, pay_type, status = sys.argv[1:]
+amount_fmt = str(decimal.Decimal(amount).quantize(decimal.Decimal("0.00"), rounding=decimal.ROUND_HALF_UP))
+timestamp = str(int(time.time() * 1000))
+nonce = f"e2e-{uuid.uuid4().hex}"
+canonical = (
+    f"transactionType={transaction_type}"
+    f"&orderSn={order_sn}"
+    f"&requestNo={request_no}"
+    f"&tradeNo={trade_no}"
+    f"&amount={amount_fmt}"
+    f"&payType={pay_type}"
+    f"&status={status}"
+    f"&timestamp={timestamp}"
+    f"&nonce={nonce}"
+)
+sign = hmac.new(secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+print(json.dumps({
+    "transactionType": int(transaction_type),
+    "orderSn": order_sn,
+    "requestNo": request_no,
+    "tradeNo": trade_no,
+    "amount": amount_fmt,
+    "payType": int(pay_type),
+    "status": status,
+    "timestamp": int(timestamp),
+    "nonce": nonce,
+    "sign": sign,
+}, ensure_ascii=False, separators=(",", ":")))
+PY
+}
+
+callback_with_bad_sign() {
+  local body=$1
+
+  python - "${body}" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+payload["sign"] = "bad-sign"
+print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+PY
+}
+
+amount_plus_one() {
+  local amount=$1
+
+  python - "${amount}" <<'PY'
+import decimal
+import sys
+
+amount = decimal.Decimal(sys.argv[1]) + decimal.Decimal("1.00")
+print(str(amount.quantize(decimal.Decimal("0.00"), rounding=decimal.ROUND_HALF_UP)))
 PY
 }
 
@@ -680,7 +780,22 @@ ADMIN_LOGIN="${LOG_DIR}/admin-login.json"
 call_once_success "admin login" POST "http://127.0.0.1:8080/api/v1/admin/login" "${ADMIN_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"admin","password":"123456"}'
 ADMIN_TOKEN="$(json_path "${ADMIN_LOGIN}" "data.token")"
 ADMIN_AUTH_HEADER="Authorization: Bearer ${ADMIN_TOKEN}"
+assert_json_data_non_empty_list "${ADMIN_LOGIN}" "data.permissions"
 echo "Admin logged in"
+
+OPERATOR_LOGIN="${LOG_DIR}/operator-login.json"
+call_once_success "operator login" POST "http://127.0.0.1:8080/api/v1/admin/login" "${OPERATOR_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"operator","password":"123456"}'
+OPERATOR_TOKEN="$(json_path "${OPERATOR_LOGIN}" "data.token")"
+OPERATOR_AUTH_HEADER="Authorization: Bearer ${OPERATOR_TOKEN}"
+assert_json_data_non_empty_list "${OPERATOR_LOGIN}" "data.permissions"
+echo "Operator logged in"
+
+VIEWER_LOGIN="${LOG_DIR}/viewer-login.json"
+call_once_success "viewer login" POST "http://127.0.0.1:8080/api/v1/admin/login" "${VIEWER_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"viewer","password":"123456"}'
+VIEWER_TOKEN="$(json_path "${VIEWER_LOGIN}" "data.token")"
+VIEWER_AUTH_HEADER="Authorization: Bearer ${VIEWER_TOKEN}"
+assert_json_data_non_empty_list "${VIEWER_LOGIN}" "data.permissions"
+echo "Viewer logged in"
 
 category_response="${LOG_DIR}/category-tree.json"
 call_until_success "category tree" GET "http://127.0.0.1:8080/api/v1/categories/tree" "${category_response}"
@@ -698,6 +813,102 @@ admin_spu_list="${LOG_DIR}/admin-spu-list.json"
 call_once_success "admin spu list" GET "http://127.0.0.1:8080/api/v1/admin/products/spus?page=1&size=10" "${admin_spu_list}" \
   -H "${ADMIN_AUTH_HEADER}"
 assert_json_data_non_empty_list "${admin_spu_list}" "data.records"
+
+admin_me="${LOG_DIR}/admin-me.json"
+call_once_success "admin me" GET "http://127.0.0.1:8080/api/v1/admin/me" "${admin_me}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${admin_me}" "data.permissions"
+
+operator_spu_list="${LOG_DIR}/operator-spu-list.json"
+call_once_success "operator spu list" GET "http://127.0.0.1:8080/api/v1/admin/products/spus?page=1&size=10" "${operator_spu_list}" \
+  -H "${OPERATOR_AUTH_HEADER}"
+assert_json_data_non_empty_list "${operator_spu_list}" "data.records"
+
+operator_order_list="${LOG_DIR}/operator-order-list.json"
+call_once_success "operator order list" GET "http://127.0.0.1:8080/api/v1/admin/orders?page=1&size=10" "${operator_order_list}" \
+  -H "${OPERATOR_AUTH_HEADER}"
+
+operator_search_rebuild_forbidden="${LOG_DIR}/operator-search-rebuild-forbidden.json"
+operator_search_rebuild_status="$(request_status POST "http://127.0.0.1:8080/api/v1/admin/search/skus/rebuild-index" "${operator_search_rebuild_forbidden}" \
+  -H "${OPERATOR_AUTH_HEADER}")"
+if [[ "${operator_search_rebuild_status}" != "200" ]]; then
+  echo "Expected operator search rebuild forbidden HTTP 200 business response, got ${operator_search_rebuild_status}"
+  cat "${operator_search_rebuild_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${operator_search_rebuild_forbidden}" 40300
+
+viewer_coupon_create_forbidden="${LOG_DIR}/viewer-coupon-create-forbidden.json"
+viewer_coupon_create_status="$(request_status POST "http://127.0.0.1:8080/api/v1/admin/coupons" "${viewer_coupon_create_forbidden}" \
+  -H "${VIEWER_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"name":"E2E Viewer Forbidden Coupon","amount":1.00,"minPoint":1.00,"stock":1,"limitPerUser":1,"startTime":"2020-01-01T00:00:00","endTime":"2099-12-31T23:59:59","status":0}')"
+if [[ "${viewer_coupon_create_status}" != "200" ]]; then
+  echo "Expected viewer coupon create forbidden HTTP 200 business response, got ${viewer_coupon_create_status}"
+  cat "${viewer_coupon_create_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${viewer_coupon_create_forbidden}" 40300
+
+rbac_roles="${LOG_DIR}/admin-rbac-roles.json"
+call_once_success "admin rbac roles" GET "http://127.0.0.1:8080/api/v1/admin/rbac/roles" "${rbac_roles}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${rbac_roles}" "data"
+
+rbac_permissions="${LOG_DIR}/admin-rbac-permissions.json"
+call_once_success "admin rbac permissions" GET "http://127.0.0.1:8080/api/v1/admin/rbac/permissions" "${rbac_permissions}" \
+  -H "${ADMIN_AUTH_HEADER}"
+assert_json_data_non_empty_list "${rbac_permissions}" "data"
+
+product_read_permission_id="$(json_find_id_by_field "${rbac_permissions}" "data" "permissionCode" "product:read")"
+
+rbac_role_create="${LOG_DIR}/admin-rbac-role-create.json"
+call_once_success "admin rbac role create" POST "http://127.0.0.1:8080/api/v1/admin/rbac/roles" "${rbac_role_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"roleCode\":\"E2E_PRODUCT_READER\",\"roleName\":\"E2E商品只读\",\"description\":\"E2E generated product-read role\",\"status\":1,\"permissionIds\":[\"${product_read_permission_id}\"]}"
+rbac_role_id="$(json_path "${rbac_role_create}" "data.id")"
+
+rbac_admin_create="${LOG_DIR}/admin-rbac-admin-create.json"
+call_once_success "admin rbac admin create" POST "http://127.0.0.1:8080/api/v1/admin/rbac/admins" "${rbac_admin_create}" \
+  -H "${ADMIN_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"username\":\"rbac_e2e\",\"password\":\"123456\",\"realName\":\"RBAC E2E\",\"status\":1,\"roleIds\":[\"${rbac_role_id}\"]}"
+
+RBAC_E2E_LOGIN="${LOG_DIR}/rbac-e2e-login.json"
+call_once_success "rbac e2e admin login" POST "http://127.0.0.1:8080/api/v1/admin/login" "${RBAC_E2E_LOGIN}"   -H "${JSON_HEADER}"   -d '{"username":"rbac_e2e","password":"123456"}'
+RBAC_E2E_TOKEN="$(json_path "${RBAC_E2E_LOGIN}" "data.token")"
+RBAC_E2E_AUTH_HEADER="Authorization: Bearer ${RBAC_E2E_TOKEN}"
+assert_json_data_non_empty_list "${RBAC_E2E_LOGIN}" "data.permissions"
+
+rbac_e2e_spu_list="${LOG_DIR}/rbac-e2e-spu-list.json"
+call_once_success "rbac e2e product read" GET "http://127.0.0.1:8080/api/v1/admin/products/spus?page=1&size=10" "${rbac_e2e_spu_list}" \
+  -H "${RBAC_E2E_AUTH_HEADER}"
+assert_json_data_non_empty_list "${rbac_e2e_spu_list}" "data.records"
+
+rbac_e2e_coupon_forbidden="${LOG_DIR}/rbac-e2e-coupon-forbidden.json"
+rbac_e2e_coupon_status="$(request_status POST "http://127.0.0.1:8080/api/v1/admin/coupons" "${rbac_e2e_coupon_forbidden}" \
+  -H "${RBAC_E2E_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d '{"name":"E2E RBAC Forbidden Coupon","amount":1.00,"minPoint":1.00,"stock":1,"limitPerUser":1,"startTime":"2020-01-01T00:00:00","endTime":"2099-12-31T23:59:59","status":0}')"
+if [[ "${rbac_e2e_coupon_status}" != "200" ]]; then
+  echo "Expected RBAC E2E coupon create forbidden HTTP 200 business response, got ${rbac_e2e_coupon_status}"
+  cat "${rbac_e2e_coupon_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${rbac_e2e_coupon_forbidden}" 40300
+
+operator_rbac_role_forbidden="${LOG_DIR}/operator-rbac-role-forbidden.json"
+operator_rbac_role_status="$(request_status POST "http://127.0.0.1:8080/api/v1/admin/rbac/roles" "${operator_rbac_role_forbidden}" \
+  -H "${OPERATOR_AUTH_HEADER}" \
+  -H "${JSON_HEADER}" \
+  -d "{\"roleCode\":\"E2E_FORBIDDEN_ROLE\",\"roleName\":\"E2E Forbidden\",\"description\":\"operator should not create roles\",\"status\":1,\"permissionIds\":[\"${product_read_permission_id}\"]}" )"
+if [[ "${operator_rbac_role_status}" != "200" ]]; then
+  echo "Expected operator RBAC role create forbidden HTTP 200 business response, got ${operator_rbac_role_status}"
+  cat "${operator_rbac_role_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${operator_rbac_role_forbidden}" 40300
 
 admin_spu_create="${LOG_DIR}/admin-spu-create.json"
 call_once_success "admin spu create" POST "http://127.0.0.1:8080/api/v1/admin/products/spus" "${admin_spu_create}" \
@@ -904,6 +1115,54 @@ wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "0" "locked s
 wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after payment"
 wait_mysql_equals "SELECT status FROM pms_stock_lock_log WHERE order_sn = '${order_sn}' AND sku_id = 2001" "2" "stock lock log after payment"
 wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'payment-success-topic' AND consumer_group = 'payment-success-consumer-group' AND order_sn = '${order_sn}'" "1" "payment consume log"
+wait_mysql_equals "SELECT COUNT(1) FROM oms_payment_transaction pt INNER JOIN oms_order o ON pt.order_sn = o.order_sn WHERE pt.order_sn = '${order_sn}' AND pt.transaction_type = 1 AND pt.status = 1 AND pt.amount = o.pay_amount" "1" "payment transaction success"
+
+payment_request_no="$(mysql_scalar "SELECT request_no FROM oms_payment_transaction WHERE order_sn = '${order_sn}' AND transaction_type = 1")"
+payment_trade_no="$(mysql_scalar "SELECT trade_no FROM oms_payment_transaction WHERE order_sn = '${order_sn}' AND transaction_type = 1")"
+payment_amount="$(mysql_scalar "SELECT amount FROM oms_payment_transaction WHERE order_sn = '${order_sn}' AND transaction_type = 1")"
+payment_pay_type="$(mysql_scalar "SELECT pay_type FROM oms_payment_transaction WHERE order_sn = '${order_sn}' AND transaction_type = 1")"
+
+payment_duplicate="${LOG_DIR}/order-pay-duplicate.json"
+call_once_success "order pay duplicate idempotent" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock?orderSn=${order_sn}&payType=1" "${payment_duplicate}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after duplicate payment"
+wait_mysql_equals "SELECT lock_stock FROM pms_sku WHERE id = 2001" "0" "locked stock after duplicate payment"
+wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after duplicate payment"
+wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'payment-success-topic' AND consumer_group = 'payment-success-consumer-group' AND order_sn = '${order_sn}'" "1" "payment consume log after duplicate payment"
+
+payment_callback_body="$(mock_callback_json 1 "${order_sn}" "${payment_request_no}" "${payment_trade_no}" "${payment_amount}" "${payment_pay_type}" "SUCCESS")"
+payment_duplicate_callback="${LOG_DIR}/payment-duplicate-callback.json"
+call_once_success "payment duplicate callback idempotent" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock/callback" "${payment_duplicate_callback}" \
+  -H "${JSON_HEADER}" \
+  -d "${payment_callback_body}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "order status after duplicate payment callback"
+wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'payment-success-topic' AND consumer_group = 'payment-success-consumer-group' AND order_sn = '${order_sn}'" "1" "payment consume log after duplicate callback"
+
+payment_bad_sign="${LOG_DIR}/payment-bad-sign-callback.json"
+payment_bad_sign_status="$(request_status POST "http://127.0.0.1:8080/api/v1/orders/pay/mock/callback" "${payment_bad_sign}" \
+  -H "${JSON_HEADER}" \
+  -d "$(callback_with_bad_sign "${payment_callback_body}")")"
+if [[ "${payment_bad_sign_status}" != "200" ]]; then
+  echo "Expected bad-sign payment callback HTTP 200 business forbidden, got ${payment_bad_sign_status}"
+  cat "${payment_bad_sign}" || true
+  exit 1
+fi
+assert_json_code "${payment_bad_sign}" 40300
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "order status after bad-sign payment callback"
+
+payment_amount_mismatch="${LOG_DIR}/payment-amount-mismatch-callback.json"
+wrong_payment_amount="$(amount_plus_one "${payment_amount}")"
+payment_amount_mismatch_body="$(mock_callback_json 1 "${order_sn}" "${payment_request_no}" "${payment_trade_no}" "${wrong_payment_amount}" "${payment_pay_type}" "SUCCESS")"
+payment_amount_mismatch_status="$(request_status POST "http://127.0.0.1:8080/api/v1/orders/pay/mock/callback" "${payment_amount_mismatch}" \
+  -H "${JSON_HEADER}" \
+  -d "${payment_amount_mismatch_body}")"
+if [[ "${payment_amount_mismatch_status}" != "200" ]]; then
+  echo "Expected amount-mismatch payment callback HTTP 200 business warning, got ${payment_amount_mismatch_status}"
+  cat "${payment_amount_mismatch}" || true
+  exit 1
+fi
+assert_json_code "${payment_amount_mismatch}" 50001
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "order status after amount-mismatch payment callback"
 
 admin_order_list="${LOG_DIR}/admin-order-list.json"
 call_once_success "admin order list" GET "http://127.0.0.1:8080/api/v1/admin/orders?page=1&size=10&orderSn=${order_sn}" "${admin_order_list}" \
@@ -913,6 +1172,17 @@ assert_json_data_non_empty_list "${admin_order_list}" "data.records"
 admin_order_detail="${LOG_DIR}/admin-order-detail.json"
 call_once_success "admin order detail" GET "http://127.0.0.1:8080/api/v1/admin/orders/${order_sn}" "${admin_order_detail}" \
   -H "${ADMIN_AUTH_HEADER}"
+
+operator_deliver_forbidden="${LOG_DIR}/operator-deliver-forbidden.json"
+operator_deliver_status="$(request_status POST "http://127.0.0.1:8080/api/v1/admin/orders/${order_sn}/deliver?deliveryCompany=Blocked&deliverySn=NO_PERMISSION" "${operator_deliver_forbidden}" \
+  -H "${OPERATOR_AUTH_HEADER}")"
+if [[ "${operator_deliver_status}" != "200" ]]; then
+  echo "Expected operator deliver forbidden HTTP 200 business response, got ${operator_deliver_status}"
+  cat "${operator_deliver_forbidden}" || true
+  exit 1
+fi
+assert_json_code "${operator_deliver_forbidden}" 40300
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn}'" "1" "order remains paid after operator deliver forbidden"
 
 # Admin deliver (B-end operates on C-end order)
 deliver_resp="${LOG_DIR}/admin-deliver.json"
@@ -1005,6 +1275,7 @@ pay_rf="${LOG_DIR}/order-refund-pay.json"
 call_once_success "refund order pay" POST "http://127.0.0.1:8080/api/v1/orders/pay/mock?orderSn=${order_sn_rf}&payType=1" "${pay_rf}" \
   -H "${USER_AUTH_HEADER}"
 wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn_rf}'" "1" "refund order paid status"
+wait_mysql_equals "SELECT COUNT(1) FROM oms_payment_transaction pt INNER JOIN oms_order o ON pt.order_sn = o.order_sn WHERE pt.order_sn = '${order_sn_rf}' AND pt.transaction_type = 1 AND pt.status = 1 AND pt.amount = o.pay_amount" "1" "refund-order payment transaction success"
 
 refund_response="${LOG_DIR}/order-refund.json"
 call_once_success "order refund" POST "http://127.0.0.1:8080/api/v1/orders/${order_sn_rf}/refund/mock" "${refund_response}" \
@@ -1013,6 +1284,29 @@ wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn_rf}
 wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after refund"
 wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after refund"
 wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'order-refund-topic' AND consumer_group = 'order-refund-consumer-group' AND order_sn = '${order_sn_rf}'" "1" "refund consume log"
+wait_mysql_equals "SELECT COUNT(1) FROM oms_payment_transaction pt INNER JOIN oms_order o ON pt.order_sn = o.order_sn WHERE pt.order_sn = '${order_sn_rf}' AND pt.transaction_type = 2 AND pt.status = 1 AND pt.amount = o.pay_amount" "1" "refund transaction success"
+
+refund_request_no="$(mysql_scalar "SELECT request_no FROM oms_payment_transaction WHERE order_sn = '${order_sn_rf}' AND transaction_type = 2")"
+refund_trade_no="$(mysql_scalar "SELECT trade_no FROM oms_payment_transaction WHERE order_sn = '${order_sn_rf}' AND transaction_type = 2")"
+refund_amount="$(mysql_scalar "SELECT amount FROM oms_payment_transaction WHERE order_sn = '${order_sn_rf}' AND transaction_type = 2")"
+refund_pay_type="$(mysql_scalar "SELECT pay_type FROM oms_payment_transaction WHERE order_sn = '${order_sn_rf}' AND transaction_type = 2")"
+
+refund_duplicate="${LOG_DIR}/order-refund-duplicate.json"
+call_once_success "order refund duplicate idempotent" POST "http://127.0.0.1:8080/api/v1/orders/${order_sn_rf}/refund/mock" "${refund_duplicate}" \
+  -H "${USER_AUTH_HEADER}"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after duplicate refund"
+wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after duplicate refund"
+wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'order-refund-topic' AND consumer_group = 'order-refund-consumer-group' AND order_sn = '${order_sn_rf}'" "1" "refund consume log after duplicate refund"
+
+refund_callback_body="$(mock_callback_json 2 "${order_sn_rf}" "${refund_request_no}" "${refund_trade_no}" "${refund_amount}" "${refund_pay_type}" "SUCCESS")"
+refund_duplicate_callback="${LOG_DIR}/refund-duplicate-callback.json"
+call_once_success "refund duplicate callback idempotent" POST "http://127.0.0.1:8080/api/v1/orders/refund/mock/callback" "${refund_duplicate_callback}" \
+  -H "${JSON_HEADER}" \
+  -d "${refund_callback_body}"
+wait_mysql_equals "SELECT status FROM oms_order WHERE order_sn = '${order_sn_rf}'" "5" "order status after duplicate refund callback"
+wait_mysql_equals "SELECT stock FROM pms_sku WHERE id = 2001" "99" "stock after duplicate refund callback"
+wait_mysql_equals "SELECT sale_count FROM pms_sku WHERE id = 2001" "1" "sale count after duplicate refund callback"
+wait_mysql_equals "SELECT COUNT(1) FROM mq_consume_log WHERE topic = 'order-refund-topic' AND consumer_group = 'order-refund-consumer-group' AND order_sn = '${order_sn_rf}'" "1" "refund consume log after duplicate callback"
 
 # ============================================
 # Seckill

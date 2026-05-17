@@ -19,6 +19,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(userInterceptor)
                 .addPathPatterns("/api/v1/orders", "/api/v1/orders/**", "/api/v1/carts", "/api/v1/carts/**")
-                .excludePathPatterns("/api/v1/orders/inner/**");
+                .excludePathPatterns(
+                        "/api/v1/orders/inner/**",
+                        "/api/v1/orders/pay/mock/callback",
+                        "/api/v1/orders/refund/mock/callback"
+                );
     }
 }

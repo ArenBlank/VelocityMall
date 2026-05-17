@@ -2,6 +2,8 @@ package com.velocitymall.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.velocitymall.common.context.MqTraceContext;
 import com.velocitymall.common.context.UserContext;
 import com.velocitymall.common.exception.BusinessException;
@@ -24,8 +26,11 @@ import com.velocitymall.order.client.ProductFeignClient;
 import com.velocitymall.order.client.UserFeignClient;
 import com.velocitymall.order.entity.Order;
 import com.velocitymall.order.entity.OrderItem;
+import com.velocitymall.order.entity.PaymentTransaction;
 import com.velocitymall.order.mapper.OrderItemMapper;
 import com.velocitymall.order.mapper.OrderMapper;
+import com.velocitymall.order.mapper.PaymentTransactionMapper;
+import com.velocitymall.order.model.dto.MockPaymentCallbackDTO;
 import com.velocitymall.order.model.dto.OrderMessageDTO;
 import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.dto.UnlockStockDTO;
@@ -34,7 +39,9 @@ import com.velocitymall.order.model.vo.SkuVO;
 import com.velocitymall.order.model.vo.UserAddressVO;
 import com.velocitymall.order.service.CartService;
 import com.velocitymall.order.service.OrderService;
+import com.velocitymall.order.support.MockPaymentSigner;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -53,8 +60,11 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -92,6 +102,24 @@ public class OrderServiceImpl implements OrderService {
 
     private static final String ORDER_REFUND_TOPIC = "order-refund-topic";
 
+    private static final int TRANSACTION_TYPE_PAYMENT = 1;
+
+    private static final int TRANSACTION_TYPE_REFUND = 2;
+
+    private static final int TRANSACTION_STATUS_PROCESSING = 0;
+
+    private static final int TRANSACTION_STATUS_SUCCESS = 1;
+
+    private static final String CALLBACK_STATUS_SUCCESS = "SUCCESS";
+
+    private static final String REQUEST_NO_PAYMENT_PREFIX = "PAY_";
+
+    private static final String REQUEST_NO_REFUND_PREFIX = "REFUND_";
+
+    private static final String TRADE_NO_PAYMENT_PREFIX = "MOCK_PAY_";
+
+    private static final String TRADE_NO_REFUND_PREFIX = "MOCK_REFUND_";
+
     private static final long SEND_TIMEOUT_MILLIS = 3000L;
 
     private static final int DELAY_LEVEL_TEN_SECONDS = 3;
@@ -112,9 +140,17 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderItemMapper orderItemMapper;
 
+    private final PaymentTransactionMapper paymentTransactionMapper;
+
     private final RocketMQTemplate rocketMQTemplate;
 
     private final CartService cartService;
+
+    private final MockPaymentSigner mockPaymentSigner;
+
+    private final ObjectMapper objectMapper;
+
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -262,21 +298,21 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(rollbackFor = Exception.class)
     public void mockRefund(String orderSn) {
         Order order = selectCurrentUserOrder(orderSn);
-        if (order == null || !Integer.valueOf(ORDER_STATUS_PAID).equals(order.getStatus())) {
+        if (order == null) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单不存在");
+        }
+        PaymentTransaction existingSuccess = selectTransaction(orderSn, TRANSACTION_TYPE_REFUND);
+        if (Integer.valueOf(ORDER_STATUS_REFUNDED).equals(order.getStatus())
+                && isTransactionSuccess(existingSuccess)) {
+            log.info("Refund already finished, skip duplicate mock refund. orderSn: {}", orderSn);
+            return;
+        }
+        if (!Integer.valueOf(ORDER_STATUS_PAID).equals(order.getStatus())) {
             throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，无法退款");
         }
-        List<OrderItem> orderItems = listOrderItems(orderSn);
-        int affectedRows = orderMapper.markRefunded(orderSn, order.getUserId());
-        if (affectedRows == 0) {
-            throw new BusinessException(ResultCode.BIZ_WARNING, "退款失败，订单状态异常");
-        }
-        OrderRefundDTO refundDTO = new OrderRefundDTO(
-                orderSn,
-                order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType(),
-                toOrderItemDTOList(orderItems)
-        );
-        MqTraceContext.prepare(refundDTO, orderSn);
-        registerRefundMessage(orderSn, refundDTO);
+
+        PaymentTransaction transaction = prepareTransaction(order, TRANSACTION_TYPE_REFUND, order.getPayType(), order.getPayAmount());
+        handleMockRefundCallback(buildSuccessCallback(transaction, TRADE_NO_REFUND_PREFIX + orderSn));
     }
 
     @Override
@@ -344,31 +380,104 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderMapper.selectOne(new LambdaQueryWrapper<Order>()
                 .eq(Order::getOrderSn, orderSn)
                 .last("LIMIT 1"));
-        if (order == null || !Integer.valueOf(ORDER_STATUS_WAIT_PAY).equals(order.getStatus())) {
-            throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，无法支付");
+        if (order == null) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单不存在");
         }
         if (!currentUserId.equals(order.getUserId())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "无权支付该订单");
         }
+        PaymentTransaction existingSuccess = selectTransaction(orderSn, TRANSACTION_TYPE_PAYMENT);
+        if (isPaymentAlreadyHandled(order) && isTransactionSuccess(existingSuccess)) {
+            log.info("Payment already finished, skip duplicate mock payment. orderSn: {}", orderSn);
+            return;
+        }
+        if (!Integer.valueOf(ORDER_STATUS_WAIT_PAY).equals(order.getStatus())) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，无法支付");
+        }
 
-        int affectedRows = orderMapper.markPaid(orderSn, payType);
+        PaymentTransaction transaction = prepareTransaction(order, TRANSACTION_TYPE_PAYMENT, payType, order.getPayAmount());
+        handleMockPaymentCallback(buildSuccessCallback(transaction, TRADE_NO_PAYMENT_PREFIX + orderSn));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleMockPaymentCallback(MockPaymentCallbackDTO callback) {
+        PaymentTransaction transaction = validateCallbackAndGetTransaction(callback, TRANSACTION_TYPE_PAYMENT);
+        Order order = selectOrderForCallback(transaction, callback);
+        if (!CALLBACK_STATUS_SUCCESS.equalsIgnoreCase(callback.getStatus())) {
+            markTransactionFailed(transaction, callback, "支付回调状态非成功");
+            return;
+        }
+        assertCallbackAmount(callback, order.getPayAmount(), transaction, "支付回调金额不一致");
+
+        if (isPaymentAlreadyHandled(order)) {
+            paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+            log.info("Payment callback idempotent success. orderSn: {}", order.getOrderSn());
+            return;
+        }
+        if (!Integer.valueOf(ORDER_STATUS_WAIT_PAY).equals(order.getStatus())) {
+            markTransactionFailed(transaction, callback, "订单状态异常，无法支付");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，无法支付");
+        }
+
+        int affectedRows = orderMapper.markPaid(order.getOrderSn(), callback.getPayType());
         if (affectedRows == 0) {
+            Order latestOrder = selectOrderByOrderSn(order.getOrderSn());
+            if (latestOrder != null && Integer.valueOf(ORDER_STATUS_PAID).equals(latestOrder.getStatus())) {
+                paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+                log.info("Payment callback concurrent idempotent success. orderSn: {}", order.getOrderSn());
+                return;
+            }
+            markTransactionFailed(transaction, callback, "支付失败，订单状态异常");
             throw new BusinessException(ResultCode.BIZ_WARNING, "支付失败，订单状态异常");
         }
 
-        List<OrderItem> orderItems = orderItemMapper.selectList(new LambdaQueryWrapper<OrderItem>()
-                .eq(OrderItem::getOrderSn, orderSn));
-        if (orderItems == null || orderItems.isEmpty()) {
-            throw new BusinessException(ResultCode.SYSTEM_ERROR, "订单明细不存在");
+        paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+        registerPaymentSuccessMessage(order.getOrderSn(), buildPaymentSuccessMessage(order));
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handleMockRefundCallback(MockPaymentCallbackDTO callback) {
+        PaymentTransaction transaction = validateCallbackAndGetTransaction(callback, TRANSACTION_TYPE_REFUND);
+        Order order = selectOrderForCallback(transaction, callback);
+        if (!CALLBACK_STATUS_SUCCESS.equalsIgnoreCase(callback.getStatus())) {
+            markTransactionFailed(transaction, callback, "退款回调状态非成功");
+            return;
+        }
+        assertCallbackAmount(callback, order.getPayAmount(), transaction, "退款回调金额不一致");
+
+        if (Integer.valueOf(ORDER_STATUS_REFUNDED).equals(order.getStatus())) {
+            paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+            log.info("Refund callback idempotent success. orderSn: {}", order.getOrderSn());
+            return;
+        }
+        if (!Integer.valueOf(ORDER_STATUS_PAID).equals(order.getStatus())) {
+            markTransactionFailed(transaction, callback, "订单状态异常，无法退款");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单状态异常，无法退款");
         }
 
-        List<OrderItemDTO> itemDTOList = orderItems.stream()
-                .map(item -> new OrderItemDTO(item.getSkuId(), item.getSkuQuantity()))
-                .toList();
-        int orderType = order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType();
-        PaymentSuccessDTO paymentSuccessDTO = new PaymentSuccessDTO(orderSn, currentUserId, orderType, itemDTOList);
-        MqTraceContext.prepare(paymentSuccessDTO, orderSn);
-        registerPaymentSuccessMessage(orderSn, paymentSuccessDTO);
+        List<OrderItem> orderItems = listOrderItems(order.getOrderSn());
+        int affectedRows = orderMapper.markRefunded(order.getOrderSn(), order.getUserId());
+        if (affectedRows == 0) {
+            Order latestOrder = selectOrderByOrderSn(order.getOrderSn());
+            if (latestOrder != null && Integer.valueOf(ORDER_STATUS_REFUNDED).equals(latestOrder.getStatus())) {
+                paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+                log.info("Refund callback concurrent idempotent success. orderSn: {}", order.getOrderSn());
+                return;
+            }
+            markTransactionFailed(transaction, callback, "退款失败，订单状态异常");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "退款失败，订单状态异常");
+        }
+
+        paymentTransactionMapper.markSuccess(transaction.getId(), callback.getTradeNo(), serializeCallback(callback));
+        OrderRefundDTO refundDTO = new OrderRefundDTO(
+                order.getOrderSn(),
+                order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType(),
+                toOrderItemDTOList(orderItems)
+        );
+        MqTraceContext.prepare(refundDTO, order.getOrderSn());
+        registerRefundMessage(order.getOrderSn(), refundDTO);
     }
 
     @Override
@@ -410,6 +519,175 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    private PaymentTransaction prepareTransaction(Order order, int transactionType, Integer payType, BigDecimal amount) {
+        PaymentTransaction existing = selectTransaction(order.getOrderSn(), transactionType);
+        BigDecimal normalizedAmount = normalizeAmount(amount);
+        Integer normalizedPayType = payType == null ? 1 : payType;
+        if (existing != null) {
+            if (isTransactionSuccess(existing)) {
+                return existing;
+            }
+            paymentTransactionMapper.resetForRetry(existing.getId(), normalizedPayType, normalizedAmount);
+            return paymentTransactionMapper.selectById(existing.getId());
+        }
+
+        PaymentTransaction transaction = PaymentTransaction.builder()
+                .orderSn(order.getOrderSn())
+                .userId(order.getUserId())
+                .transactionType(transactionType)
+                .payType(normalizedPayType)
+                .amount(normalizedAmount)
+                .requestNo(requestNo(transactionType, order.getOrderSn()))
+                .status(TRANSACTION_STATUS_PROCESSING)
+                .build();
+        try {
+            paymentTransactionMapper.insert(transaction);
+            return transaction;
+        } catch (DuplicateKeyException exception) {
+            PaymentTransaction duplicated = selectTransaction(order.getOrderSn(), transactionType);
+            if (duplicated == null) {
+                throw exception;
+            }
+            return duplicated;
+        }
+    }
+
+    private PaymentTransaction validateCallbackAndGetTransaction(MockPaymentCallbackDTO callback, int expectedTransactionType) {
+        if (callback == null) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "回调参数不能为空");
+        }
+        if (!Objects.equals(callback.getTransactionType(), expectedTransactionType)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "回调流水类型非法");
+        }
+        if (!mockPaymentSigner.verify(callback)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "回调签名无效");
+        }
+        PaymentTransaction transaction = paymentTransactionMapper.selectOne(new LambdaQueryWrapper<PaymentTransaction>()
+                .eq(PaymentTransaction::getRequestNo, callback.getRequestNo())
+                .eq(PaymentTransaction::getTransactionType, expectedTransactionType)
+                .last("LIMIT 1"));
+        if (transaction == null) {
+            throw new BusinessException(ResultCode.BIZ_WARNING, "支付流水不存在");
+        }
+        if (!Objects.equals(transaction.getOrderSn(), callback.getOrderSn())) {
+            markTransactionFailed(transaction, callback, "回调订单号与流水不一致");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "回调订单号与流水不一致");
+        }
+        return transaction;
+    }
+
+    private Order selectOrderForCallback(PaymentTransaction transaction, MockPaymentCallbackDTO callback) {
+        Order order = selectOrderByOrderSn(transaction.getOrderSn());
+        if (order == null) {
+            markTransactionFailed(transaction, callback, "订单不存在");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "订单不存在");
+        }
+        if (!Objects.equals(order.getUserId(), transaction.getUserId())) {
+            markTransactionFailed(transaction, callback, "流水用户与订单用户不一致");
+            throw new BusinessException(ResultCode.BIZ_WARNING, "流水用户与订单用户不一致");
+        }
+        return order;
+    }
+
+    private void assertCallbackAmount(
+            MockPaymentCallbackDTO callback,
+            BigDecimal expectedAmount,
+            PaymentTransaction transaction,
+            String message
+    ) {
+        BigDecimal actual = normalizeAmount(callback.getAmount());
+        BigDecimal expected = normalizeAmount(expectedAmount);
+        BigDecimal transactionAmount = normalizeAmount(transaction.getAmount());
+        if (actual.compareTo(expected) != 0 || actual.compareTo(transactionAmount) != 0) {
+            markTransactionFailed(transaction, callback, message);
+            throw new BusinessException(ResultCode.BIZ_WARNING, message);
+        }
+    }
+
+    private PaymentSuccessDTO buildPaymentSuccessMessage(Order order) {
+        List<OrderItem> orderItems = listOrderItems(order.getOrderSn());
+        List<OrderItemDTO> itemDTOList = orderItems.stream()
+                .map(item -> new OrderItemDTO(item.getSkuId(), item.getSkuQuantity()))
+                .toList();
+        int orderType = order.getOrderType() == null ? ORDER_TYPE_NORMAL : order.getOrderType();
+        PaymentSuccessDTO paymentSuccessDTO = new PaymentSuccessDTO(
+                order.getOrderSn(),
+                order.getUserId(),
+                orderType,
+                itemDTOList
+        );
+        return MqTraceContext.prepare(paymentSuccessDTO, order.getOrderSn());
+    }
+
+    private MockPaymentCallbackDTO buildSuccessCallback(PaymentTransaction transaction, String tradeNo) {
+        MockPaymentCallbackDTO callback = new MockPaymentCallbackDTO();
+        callback.setTransactionType(transaction.getTransactionType());
+        callback.setOrderSn(transaction.getOrderSn());
+        callback.setRequestNo(transaction.getRequestNo());
+        callback.setTradeNo(tradeNo);
+        callback.setAmount(normalizeAmount(transaction.getAmount()));
+        callback.setPayType(transaction.getPayType() == null ? 1 : transaction.getPayType());
+        callback.setStatus(CALLBACK_STATUS_SUCCESS);
+        callback.setTimestamp(System.currentTimeMillis());
+        callback.setNonce(transaction.getRequestNo() + "_" + callback.getTimestamp());
+        callback.setSign(mockPaymentSigner.sign(callback));
+        return callback;
+    }
+
+    private void markTransactionFailed(PaymentTransaction transaction, MockPaymentCallbackDTO callback, String reason) {
+        if (transaction == null || isTransactionSuccess(transaction)) {
+            return;
+        }
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transactionTemplate.executeWithoutResult(status -> paymentTransactionMapper.markFailed(
+                transaction.getId(),
+                callback == null ? null : callback.getTradeNo(),
+                serializeCallback(callback),
+                reason
+        ));
+    }
+
+    private String serializeCallback(MockPaymentCallbackDTO callback) {
+        if (callback == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(callback);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "回调报文序列化失败");
+        }
+    }
+
+    private PaymentTransaction selectTransaction(String orderSn, int transactionType) {
+        return paymentTransactionMapper.selectOne(new LambdaQueryWrapper<PaymentTransaction>()
+                .eq(PaymentTransaction::getOrderSn, orderSn)
+                .eq(PaymentTransaction::getTransactionType, transactionType)
+                .last("LIMIT 1"));
+    }
+
+    private boolean isTransactionSuccess(PaymentTransaction transaction) {
+        return transaction != null && Integer.valueOf(TRANSACTION_STATUS_SUCCESS).equals(transaction.getStatus());
+    }
+
+    private boolean isPaymentAlreadyHandled(Order order) {
+        if (order == null || order.getStatus() == null) {
+            return false;
+        }
+        return Integer.valueOf(ORDER_STATUS_PAID).equals(order.getStatus())
+                || Integer.valueOf(ORDER_STATUS_DELIVERED).equals(order.getStatus())
+                || Integer.valueOf(ORDER_STATUS_COMPLETED).equals(order.getStatus())
+                || Integer.valueOf(ORDER_STATUS_REFUNDED).equals(order.getStatus());
+    }
+
+    private String requestNo(int transactionType, String orderSn) {
+        return (transactionType == TRANSACTION_TYPE_REFUND ? REQUEST_NO_REFUND_PREFIX : REQUEST_NO_PAYMENT_PREFIX) + orderSn;
+    }
+
+    private BigDecimal normalizeAmount(BigDecimal amount) {
+        return (amount == null ? DEFAULT_AMOUNT : amount).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private Order selectCurrentUserOrder(String orderSn) {
         if (!StringUtils.hasText(orderSn)) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "订单号不能为空");
@@ -417,6 +695,15 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.selectOne(new LambdaQueryWrapper<Order>()
                 .eq(Order::getOrderSn, orderSn)
                 .eq(Order::getUserId, getCurrentUserId())
+                .last("LIMIT 1"));
+    }
+
+    private Order selectOrderByOrderSn(String orderSn) {
+        if (!StringUtils.hasText(orderSn)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "订单号不能为空");
+        }
+        return orderMapper.selectOne(new LambdaQueryWrapper<Order>()
+                .eq(Order::getOrderSn, orderSn)
                 .last("LIMIT 1"));
     }
 

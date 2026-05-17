@@ -4,6 +4,8 @@ import com.velocitymall.common.model.vo.PageVO;
 import com.velocitymall.common.result.Result;
 import com.velocitymall.review.model.dto.ReviewCreateDTO;
 import com.velocitymall.review.model.dto.ReviewInteractionDTO;
+import com.velocitymall.review.model.dto.ReviewReplyCreateDTO;
+import com.velocitymall.review.model.vo.ReviewReplyVO;
 import com.velocitymall.review.model.vo.ReviewStatsVO;
 import com.velocitymall.review.model.vo.ReviewVO;
 import com.velocitymall.review.service.ReviewService;
@@ -61,6 +63,36 @@ public class ReviewController {
             @Valid @RequestBody ReviewInteractionDTO dto
     ) {
         reviewService.interactReview(reviewId, dto);
+        return Result.success();
+    }
+
+    @GetMapping("/{review-id}/replies")
+    public Result<PageVO<ReviewReplyVO>> listReviewReplies(
+            @PathVariable("review-id") @Min(1) Long reviewId,
+            @RequestParam(value = "page", defaultValue = "1")
+            @Min(value = 1, message = "page必须大于0") Long page,
+            @RequestParam(value = "size", defaultValue = "10")
+            @Min(value = 1, message = "size必须大于0")
+            @Max(value = 100, message = "size不能大于100") Long size
+    ) {
+        return Result.success(reviewService.listReviewReplies(reviewId, page, size));
+    }
+
+    @PostMapping("/{review-id}/replies")
+    public Result<Void> createReviewReply(
+            @PathVariable("review-id") @Min(1) Long reviewId,
+            @Valid @RequestBody ReviewReplyCreateDTO dto
+    ) {
+        reviewService.createReviewReply(reviewId, dto);
+        return Result.success();
+    }
+
+    @DeleteMapping("/{review-id}/replies/{reply-id}")
+    public Result<Void> deleteReviewReply(
+            @PathVariable("review-id") @Min(1) Long reviewId,
+            @PathVariable("reply-id") @Min(1) Long replyId
+    ) {
+        reviewService.deleteReviewReply(reviewId, replyId);
         return Result.success();
     }
 

@@ -5,7 +5,7 @@
         <h1>商品运营</h1>
         <p>管理 SPU 与 SKU，商品上下架和封面上传会影响 C 端展示。</p>
       </div>
-      <button class="primary-button" type="button" @click="openCreate">
+      <button v-if="canWriteProducts" class="primary-button" type="button" @click="openCreate">
         <Plus :size="18" /> 新建 SPU
       </button>
     </div>
@@ -27,7 +27,7 @@
       <button class="outline-button" type="button" @click="reset">重置</button>
     </form>
 
-    <div class="drawer-grid">
+    <div class="drawer-grid" :class="{ 'single-column': !canWriteProducts }">
       <div class="panel">
         <table class="data-table">
           <thead>
@@ -56,8 +56,9 @@
               <td>
                 <div class="row-actions">
                   <RouterLink class="ghost-button compact" :to="`/products/${spu.spuId}`">详情</RouterLink>
-                  <button class="ghost-button compact" type="button" @click="edit(spu)">编辑</button>
+                  <button v-if="canWriteProducts" class="ghost-button compact" type="button" @click="edit(spu)">编辑</button>
                   <button
+                    v-if="canWriteProducts"
                     class="danger-button compact"
                     type="button"
                     @click="toggleStatus(spu)"
@@ -79,7 +80,7 @@
         />
       </div>
 
-      <aside class="panel">
+      <aside v-if="canWriteProducts" class="panel">
         <div class="section-title">
           <h2>{{ editingSpuId ? '编辑 SPU' : '新建 SPU' }}</h2>
         </div>
@@ -127,11 +128,14 @@ import EmptyState from '@/components/EmptyState.vue';
 import Pager from '@/components/Pager.vue';
 import SafeImage from '@/components/SafeImage.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import type { AdminSpuVO } from '@/api/types';
 import { useAdminProductStore } from '@/stores/adminProductStore';
+import { useAdminAuthStore } from '@/stores/adminAuthStore';
 import { formatTime } from '@/utils/format';
 
 const store = useAdminProductStore();
+const auth = useAdminAuthStore();
 const route = useRoute();
 const router = useRouter();
 const actionMessage = ref('');
@@ -150,6 +154,7 @@ const form = reactive({
 });
 
 const records = computed(() => store.page?.records || []);
+const canWriteProducts = computed(() => auth.hasPermission(AdminPermissions.PRODUCT_WRITE));
 
 function coverOf(spu: AdminSpuVO) {
   return spu.skuList?.find((sku) => sku.coverImg)?.coverImg || '';

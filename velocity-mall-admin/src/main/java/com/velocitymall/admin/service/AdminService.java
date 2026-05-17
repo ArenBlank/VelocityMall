@@ -7,6 +7,7 @@ import com.velocitymall.admin.model.dto.AdminSpuRequest;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminOrderVO;
+import com.velocitymall.admin.model.vo.AdminProfileVO;
 import com.velocitymall.admin.model.vo.AdminRebuildIndexVO;
 import com.velocitymall.admin.model.vo.AdminReviewVO;
 import com.velocitymall.admin.model.vo.AdminSeckillActivityVO;
@@ -19,6 +20,8 @@ import org.springframework.web.multipart.MultipartFile;
 public interface AdminService {
 
     AdminLoginVO login(String username, String password);
+
+    AdminProfileVO getCurrentAdminProfile();
 
     void deliverOrder(String orderSn, String deliveryCompany, String deliverySn);
 

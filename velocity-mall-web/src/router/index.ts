@@ -11,8 +11,23 @@ const router = createRouter({
       component: () => import('@/pages/HomePage.vue')
     },
     {
+      path: '/products',
+      name: 'normal-products',
+      component: () => import('@/pages/NormalProductsPage.vue')
+    },
+    {
       path: '/products/:skuId',
       name: 'product-detail',
+      component: () => import('@/pages/FlashSalePage.vue')
+    },
+    {
+      path: '/seckill',
+      name: 'seckill-zone',
+      component: () => import('@/pages/SeckillZonePage.vue')
+    },
+    {
+      path: '/seckill/:skuId',
+      name: 'seckill-detail',
       component: () => import('@/pages/FlashSalePage.vue')
     },
     {
@@ -62,7 +77,10 @@ const router = createRouter({
       props: true
     }
   ],
-  scrollBehavior() {
+  scrollBehavior(to) {
+    if (to.hash) {
+      return { el: to.hash, top: 16 };
+    }
     return { top: 0 };
   }
 });

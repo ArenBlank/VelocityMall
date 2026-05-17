@@ -4,6 +4,7 @@ import com.velocitymall.common.model.dto.SeckillOrderDTO;
 import com.velocitymall.common.model.vo.OrderDetailVO;
 import com.velocitymall.common.model.vo.PageVO;
 import com.velocitymall.common.model.vo.SeckillResultVO;
+import com.velocitymall.order.model.dto.MockPaymentCallbackDTO;
 import com.velocitymall.order.model.dto.SubmitOrderDTO;
 import com.velocitymall.order.model.vo.OrderVO;
 
@@ -74,6 +75,20 @@ public interface OrderService {
      * @param payType payment type
      */
     void mockPaySuccess(String orderSn, Integer payType);
+
+    /**
+     * Handle a mock third-party payment callback.
+     *
+     * @param callback signed callback payload
+     */
+    void handleMockPaymentCallback(MockPaymentCallbackDTO callback);
+
+    /**
+     * Handle a mock third-party refund callback.
+     *
+     * @param callback signed callback payload
+     */
+    void handleMockRefundCallback(MockPaymentCallbackDTO callback);
 
     /**
      * Check whether a user has completed (received) an order containing the SKU.
