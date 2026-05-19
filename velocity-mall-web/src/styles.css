@@ -3337,24 +3337,26 @@ img {
   right: 70px;
   top: 92px;
   bottom: 88px;
-  max-width: min(40%, 470px);
-  width: auto;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
+  width: min(40%, 470px);
+  padding: 12px;
+  border: 2px solid #2d323a;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 28px 80px rgba(0, 0, 0, 0.34);
+  overflow: hidden;
 }
 
 .campaign-phone {
+  display: block;
   width: 100%;
+  height: 100%;
   max-width: 100%;
-  height: auto;
   max-height: 100%;
   object-fit: contain;
   object-position: center;
-  border-radius: 22px;
+  border-radius: 16px;
   filter: contrast(1.03) saturate(0.92);
 }
 
