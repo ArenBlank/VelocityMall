@@ -64,6 +64,12 @@ spring:
           uri: lb://velocity-mall-admin
           predicates:
             - Path=/api/v1/admin/**
+        - id: minio-route
+          uri: http://127.0.0.1:9000
+          predicates:
+            - Path=/minio/**
+          filters:
+            - StripPrefix=1
       discovery:
         locator:
           enabled: false
