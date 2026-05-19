@@ -843,10 +843,15 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.96), transparent 45%),
     linear-gradient(180deg, #ffffff 0%, #f7f7f8 42%, #f8f8f9 100%);
@@ -874,12 +879,14 @@ img {
   width: min(100%, 1680px);
   margin: 0 auto;
   padding: 0 28px 32px;
+  overflow-x: hidden;
 }
 
 .auth-shell {
   width: min(100%, 1680px);
   min-height: 100vh;
   margin: 0 auto;
+  overflow-x: hidden;
   padding: 22px 18px 36px;
 }
 
@@ -4422,6 +4429,51 @@ body:has(.auth-shell) {
 
   .search-box {
     grid-template-columns: 1fr 88px;
+    height: 48px;
+  }
+
+  .search-box input {
+    font-size: 15px;
+    padding: 0 14px;
+  }
+
+  .flash-ribbon {
+    height: auto;
+    flex-wrap: wrap;
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .flash-ribbon > * {
+    border-radius: 4px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .ribbon-title {
+    font-size: 18px;
+    width: 100%;
+  }
+
+  .brand-zone small {
+    display: none;
+  }
+
+  .clean-header {
+    height: auto;
+    padding: 12px 0;
+  }
+
+  .category-nav {
+    height: auto;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .category-nav a {
+    font-size: 14px;
+    padding: 4px 0;
   }
 
   .catalog-tabs,
