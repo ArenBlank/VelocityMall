@@ -42,6 +42,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private static final String[] GET_WHITE_LIST = {
+            "/api/health",
             "/api/v1/products/spus/**",
             "/api/v1/products/skus/*",
             "/api/v1/search/**",
@@ -78,6 +79,11 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
+
+        // CORS 预检请求直接放行，由 globalcors 配置处理响应头
+        if (HttpMethod.OPTIONS.equals(request.getMethod())) {
+            return chain.filter(exchange);
+        }
 
         if (isBlackRequest(path)) {
             log.warn("非法外网访问内部接口拦截: {}", path);

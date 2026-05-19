@@ -7,6 +7,10 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      redirect: '/login'
+    },
+    {
+      path: '/home',
       name: 'home',
       component: () => import('@/pages/HomePage.vue')
     },
@@ -94,7 +98,7 @@ router.beforeEach((to) => {
     };
   }
   if (to.meta.publicOnly && token) {
-    return { name: 'home' };
+    return { path: '/home' };
   }
   return true;
 });

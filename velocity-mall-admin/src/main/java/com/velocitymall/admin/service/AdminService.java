@@ -4,6 +4,7 @@ import com.velocitymall.admin.model.dto.AdminCouponRequest;
 import com.velocitymall.admin.model.dto.AdminSeckillActivityRequest;
 import com.velocitymall.admin.model.dto.AdminSkuRequest;
 import com.velocitymall.admin.model.dto.AdminSpuRequest;
+import com.velocitymall.admin.model.dto.SeckillTestRequest;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminOrderVO;
@@ -15,6 +16,7 @@ import com.velocitymall.admin.model.vo.AdminSkuVO;
 import com.velocitymall.admin.model.vo.AdminSpuVO;
 import com.velocitymall.admin.model.vo.FileUploadVO;
 import com.velocitymall.common.model.vo.PageVO;
+import java.util.Map;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface AdminService {
@@ -56,6 +58,10 @@ public interface AdminService {
     AdminSeckillActivityVO updateSeckillActivityStatus(Long id, Integer status);
 
     AdminSeckillActivityVO preheatSeckillActivity(Long id);
+
+    Map<String, Object> initSeckillTest(SeckillTestRequest request);
+
+    Map<String, Object> cleanupSeckillTest(Long skuId);
 
     PageVO<AdminCouponVO> listCoupons(Long page, Long size, Integer status);
 

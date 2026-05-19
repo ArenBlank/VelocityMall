@@ -178,6 +178,25 @@ export interface AdminSeckillActivityRequest {
   status: number;
 }
 
+export interface SeckillTestRequest {
+  skuId: number;
+  stock?: number;
+}
+
+export interface SeckillTestResult {
+  skuId: number;
+  activityId?: number;
+  activityName?: string;
+  mysqlStock?: number;
+  redisStock?: number;
+  wasDisabled?: boolean;
+  deletedOrderItems?: number;
+  deletedOrders?: number;
+  mysqlStockBefore?: number;
+  mysqlStockAfter?: number;
+  redisCleared?: boolean;
+}
+
 export interface AdminCouponVO {
   id: number;
   name: string;

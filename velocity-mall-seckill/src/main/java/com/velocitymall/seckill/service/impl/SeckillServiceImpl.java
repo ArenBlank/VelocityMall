@@ -8,7 +8,10 @@ import com.velocitymall.common.result.ResultCode;
 import com.velocitymall.seckill.entity.SeckillActivity;
 import com.velocitymall.seckill.service.SeckillActivityService;
 import com.velocitymall.seckill.service.SeckillService;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +34,14 @@ public class SeckillServiceImpl implements SeckillService {
     private static final String STOCK_KEY_PREFIX = "velocitymall:seckill:stock:";
 
     private static final String BOUGHT_KEY_PREFIX = "velocitymall:seckill:bought:";
+
+    private static final String QPS_KEY = "velocitymall:seckill:qps:";
+
+    private static final String LATENCY_KEY = "velocitymall:seckill:latency:";
+
+    private static final String MQ_SENT_KEY = "velocitymall:seckill:mq-sent:";
+
+    private static final int LATENCY_SAMPLE_SIZE = 100;
 
     private static final String SECKILL_ORDER_TOPIC = "seckill-order-topic";
 
@@ -89,14 +100,24 @@ public class SeckillServiceImpl implements SeckillService {
 
     @Override
     public String execute(Long skuId) {
-        if (skuId == null || skuId <= 0) {
-            throw new BusinessException(ResultCode.PARAM_ERROR, "SKU ID 不能为空");
-        }
-
         Long userId = UserContext.getUserId();
         if (userId == null) {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户未登录");
         }
+        return execute(skuId, userId);
+    }
+
+    @Override
+    public String execute(Long skuId, Long userId) {
+        if (skuId == null || skuId <= 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "SKU ID 不能为空");
+        }
+        if (userId == null || userId <= 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "用户 ID 非法");
+        }
+
+        long start = System.currentTimeMillis();
+        trackQps(skuId);
 
         SeckillActivity activity = seckillActivityService.requireActiveActivity(skuId);
         String stockKey = STOCK_KEY_PREFIX + skuId;
@@ -112,14 +133,19 @@ public class SeckillServiceImpl implements SeckillService {
         );
 
         if (LUA_DUPLICATE.equals(luaResult)) {
+            trackLatency(skuId, start);
             throw new BusinessException(ResultCode.BIZ_WARNING, "请勿重复抢购");
         }
         if (LUA_SOLD_OUT.equals(luaResult)) {
+            trackLatency(skuId, start);
             throw new BusinessException(ResultCode.BIZ_WARNING, "商品已抢光");
         }
         if (!LUA_SUCCESS.equals(luaResult)) {
+            trackLatency(skuId, start);
             throw new BusinessException(ResultCode.SYSTEM_ERROR, "秒杀系统繁忙，请稍后重试");
         }
+
+        trackLatency(skuId, start);
 
         String orderSn = generateSeckillOrderSn();
         SeckillOrderDTO messageDTO = new SeckillOrderDTO(
@@ -173,6 +199,7 @@ public class SeckillServiceImpl implements SeckillService {
             }
             log.info("Seckill order message sent. orderSn: {}, skuId: {}",
                     messageDTO.getOrderSn(), messageDTO.getSkuId());
+            trackMqSent(messageDTO.getSkuId());
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -196,6 +223,71 @@ public class SeckillServiceImpl implements SeckillService {
         } catch (Exception exception) {
             log.error("Seckill MQ failure compensation failed. stockKey: {}, boughtKey: {}",
                     stockKey, boughtKey, exception);
+        }
+    }
+
+    private void trackQps(Long skuId) {
+        try {
+            String key = QPS_KEY + skuId;
+            stringRedisTemplate.opsForValue().increment(key);
+            stringRedisTemplate.expire(key, java.time.Duration.ofSeconds(5));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void trackLatency(Long skuId, long startMs) {
+        try {
+            long elapsed = System.currentTimeMillis() - startMs;
+            String key = LATENCY_KEY + skuId;
+            stringRedisTemplate.opsForList().leftPush(key, String.valueOf(elapsed));
+            stringRedisTemplate.opsForList().trim(key, 0, LATENCY_SAMPLE_SIZE - 1);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void trackMqSent(Long skuId) {
+        try {
+            stringRedisTemplate.opsForValue().increment(MQ_SENT_KEY + skuId);
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    public Map<String, Object> getStressMetrics(Long skuId) {
+        Map<String, Object> metrics = new HashMap<>();
+
+        String stockStr = stringRedisTemplate.opsForValue().get(STOCK_KEY_PREFIX + skuId);
+        metrics.put("stock", stockStr != null ? Integer.parseInt(stockStr) : 0);
+
+        String qpsStr = stringRedisTemplate.opsForValue().get(QPS_KEY + skuId);
+        metrics.put("qps", qpsStr != null ? Integer.parseInt(qpsStr) : 0);
+
+        List<String> latencies = stringRedisTemplate.opsForList()
+                .range(LATENCY_KEY + skuId, 0, -1);
+        if (latencies != null && !latencies.isEmpty()) {
+            List<Long> sorted = latencies.stream()
+                    .map(Long::parseLong)
+                    .sorted()
+                    .toList();
+            int mid = sorted.size() / 2;
+            metrics.put("latency", sorted.get(mid));
+        } else {
+            metrics.put("latency", 0);
+        }
+
+        String mqSentStr = stringRedisTemplate.opsForValue().get(MQ_SENT_KEY + skuId);
+        metrics.put("mqQueue", mqSentStr != null ? Integer.parseInt(mqSentStr) : 0);
+
+        return metrics;
+    }
+
+    @Override
+    public void resetStressMetrics(Long skuId) {
+        try {
+            stringRedisTemplate.delete(QPS_KEY + skuId);
+            stringRedisTemplate.delete(LATENCY_KEY + skuId);
+            stringRedisTemplate.delete(MQ_SENT_KEY + skuId);
+        } catch (Exception ignored) {
         }
     }
 

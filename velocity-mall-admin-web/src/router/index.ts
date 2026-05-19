@@ -46,6 +46,12 @@ const router = createRouter({
           meta: { permission: AdminPermissions.SECKILL_READ }
         },
         {
+          path: 'seckill-stress-console',
+          name: 'seckill-stress-console',
+          component: () => import('@/pages/SeckillStressConsolePage.vue'),
+          meta: { permission: AdminPermissions.SECKILL_READ }
+        },
+        {
           path: 'coupons',
           name: 'coupons',
           component: () => import('@/pages/CouponsPage.vue'),

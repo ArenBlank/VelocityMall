@@ -29,6 +29,7 @@ import com.velocitymall.admin.model.dto.AdminSeckillActivityRequest;
 import com.velocitymall.admin.model.dto.AdminSkuRequest;
 import com.velocitymall.admin.model.dto.AdminSpuRequest;
 import com.velocitymall.admin.model.dto.ProductSkuUpdateRequest;
+import com.velocitymall.admin.model.dto.SeckillTestRequest;
 import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminOrderItemVO;
@@ -414,6 +415,106 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional
+    public Map<String, Object> initSeckillTest(SeckillTestRequest request) {
+        Long skuId = request.getSkuId();
+        int stock = request.getStock() != null ? request.getStock() : 1000;
+
+        AdminSeckillActivity activity = adminSeckillActivityMapper.selectOne(
+                new LambdaQueryWrapper<AdminSeckillActivity>()
+                        .eq(AdminSeckillActivity::getSkuId, skuId)
+        );
+
+        if (activity == null) {
+            throw new BusinessException(ResultCode.BIZ_WARNING,
+                    "SKU " + skuId + " 没有秒杀活动，请先在「秒杀活动」页面创建");
+        }
+
+        AdminSku sku = requireSku(skuId);
+        sku.setStock(stock);
+        sku.setLockStock(0);
+        adminSkuMapper.updateById(sku);
+
+        boolean wasDisabled = activity.getStatus() == null || activity.getStatus() != STATUS_ENABLED;
+        if (wasDisabled) {
+            activity.setStatus(STATUS_ENABLED);
+            adminSeckillActivityMapper.updateById(activity);
+        }
+
+        activity.setSeckillStock(stock);
+        adminSeckillActivityMapper.updateById(activity);
+
+        stringRedisTemplate.opsForValue().set(SECKILL_STOCK_PREFIX + skuId, String.valueOf(stock));
+        stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+        resetStressMetricsKeys(skuId);
+
+        String redisStock = stringRedisTemplate.opsForValue().get(SECKILL_STOCK_PREFIX + skuId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("skuId", skuId);
+        result.put("activityId", activity.getId());
+        result.put("activityName", activity.getActivityName());
+        result.put("mysqlStock", stock);
+        result.put("redisStock", redisStock != null ? Integer.parseInt(redisStock) : 0);
+        result.put("wasDisabled", wasDisabled);
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> cleanupSeckillTest(Long skuId) {
+        stringRedisTemplate.delete(SECKILL_STOCK_PREFIX + skuId);
+        stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+        resetStressMetricsKeys(skuId);
+
+        List<AdminOrderItem> items = adminOrderItemMapper.selectList(
+                new LambdaQueryWrapper<AdminOrderItem>()
+                        .eq(AdminOrderItem::getSkuId, skuId)
+        );
+
+        int deletedOrders = 0;
+        if (!items.isEmpty()) {
+            Set<String> orderSns = items.stream()
+                    .map(AdminOrderItem::getOrderSn)
+                    .collect(Collectors.toSet());
+
+            adminOrderItemMapper.delete(
+                    new LambdaQueryWrapper<AdminOrderItem>()
+                            .eq(AdminOrderItem::getSkuId, skuId)
+            );
+
+            for (String orderSn : orderSns) {
+                Long remainingItems = adminOrderItemMapper.selectCount(
+                        new LambdaQueryWrapper<AdminOrderItem>()
+                                .eq(AdminOrderItem::getOrderSn, orderSn)
+                );
+                if (remainingItems == 0) {
+                    adminOrderMapper.delete(
+                            new LambdaQueryWrapper<AdminOrder>()
+                                    .eq(AdminOrder::getOrderSn, orderSn)
+                    );
+                    deletedOrders++;
+                }
+            }
+        }
+
+        AdminSku sku = requireSku(skuId);
+        int stockBefore = sku.getStock();
+        sku.setStock(1000);
+        sku.setLockStock(0);
+        adminSkuMapper.updateById(sku);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("skuId", skuId);
+        result.put("deletedOrderItems", items.size());
+        result.put("deletedOrders", deletedOrders);
+        result.put("mysqlStockBefore", stockBefore);
+        result.put("mysqlStockAfter", 1000);
+        result.put("redisCleared", true);
+        return result;
+    }
+
+    @Override
     public PageVO<AdminCouponVO> listCoupons(Long page, Long size, Integer status) {
         Page<AdminCoupon> couponPage = adminCouponMapper.selectPage(
                 new Page<>(page, size),
@@ -599,6 +700,15 @@ public class AdminServiceImpl implements AdminService {
         if (skuId != null) {
             stringRedisTemplate.delete(SECKILL_STOCK_PREFIX + skuId);
             stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+        }
+    }
+
+    private void resetStressMetricsKeys(Long skuId) {
+        try {
+            stringRedisTemplate.delete("velocitymall:seckill:qps:" + skuId);
+            stringRedisTemplate.delete("velocitymall:seckill:latency:" + skuId);
+            stringRedisTemplate.delete("velocitymall:seckill:mq-sent:" + skuId);
+        } catch (Exception ignored) {
         }
     }
 

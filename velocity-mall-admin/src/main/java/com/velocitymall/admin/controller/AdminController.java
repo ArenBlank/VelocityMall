@@ -8,6 +8,7 @@ import com.velocitymall.admin.model.dto.AdminSeckillActivityRequest;
 import com.velocitymall.admin.model.dto.AdminSkuRequest;
 import com.velocitymall.admin.model.dto.AdminSpuRequest;
 import com.velocitymall.admin.model.dto.AdminStatusRequest;
+import com.velocitymall.admin.model.dto.SeckillTestRequest;
 import com.velocitymall.admin.model.vo.AdminCouponVO;
 import com.velocitymall.admin.model.vo.AdminLoginVO;
 import com.velocitymall.admin.model.vo.AdminOrderVO;
@@ -25,6 +26,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
@@ -203,6 +205,18 @@ public class AdminController {
     @RequireAdminPermission(AdminPermissionCodes.SECKILL_PREHEAT)
     public Result<AdminSeckillActivityVO> preheatSeckillActivity(@PathVariable("id") @Min(1) Long id) {
         return Result.success(adminService.preheatSeckillActivity(id));
+    }
+
+    @PostMapping("/seckill/activities/test/init")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_PREHEAT)
+    public Result<Map<String, Object>> initSeckillTest(@Valid @RequestBody SeckillTestRequest request) {
+        return Result.success(adminService.initSeckillTest(request));
+    }
+
+    @PostMapping("/seckill/activities/test/cleanup/{skuId}")
+    @RequireAdminPermission(AdminPermissionCodes.SECKILL_PREHEAT)
+    public Result<Map<String, Object>> cleanupSeckillTest(@PathVariable("skuId") @Min(1) Long skuId) {
+        return Result.success(adminService.cleanupSeckillTest(skuId));
     }
 
     @GetMapping("/coupons")

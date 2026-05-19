@@ -49,7 +49,7 @@ function switchMode(nextMode: AuthMode) {
 
 function redirectTarget() {
   const redirect = route.query.redirect;
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/';
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/home';
 }
 
 async function submit() {

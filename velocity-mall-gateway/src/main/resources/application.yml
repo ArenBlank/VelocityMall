@@ -16,6 +16,13 @@ spring:
       discovery:
         server-addr: 127.0.0.1:8848
     gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
       routes:
         - id: product-route
           uri: lb://velocity-mall-product
