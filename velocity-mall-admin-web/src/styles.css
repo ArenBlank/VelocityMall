@@ -1056,5 +1056,25 @@ label.field,
   .metrics-grid {
     grid-template-columns: 1fr;
   }
+
+  /* 兜底：强制所有元素不超出视口 */
+  *,
+  *::before,
+  *::after {
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    word-break: break-word !important;
+  }
+
+  img,
+  svg,
+  video,
+  canvas,
+  iframe,
+  table,
+  pre {
+    max-width: 100% !important;
+    height: auto !important;
+  }
 }
 }
