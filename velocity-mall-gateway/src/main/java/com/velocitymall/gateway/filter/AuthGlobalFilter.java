@@ -43,6 +43,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
 
     private static final String[] GET_WHITE_LIST = {
             "/api/health",
+            "/minio/**",
             "/api/v1/products/spus/**",
             "/api/v1/products/skus/*",
             "/api/v1/search/**",
