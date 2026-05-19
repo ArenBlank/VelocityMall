@@ -17,13 +17,18 @@
   --danger: #e11d48;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  min-width: 1180px;
+  min-width: 320px;
+  overflow-x: hidden;
 }
 
 button,
@@ -952,4 +957,104 @@ label.field,
   height: 74px;
   border-radius: 12px;
   font-size: 24px;
+}
+
+@media (max-width: 1024px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 14px 18px;
+  }
+
+  .sidebar nav {
+    grid-auto-flow: column;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .sidebar nav a {
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  .brand {
+    padding: 6px 8px 12px;
+    margin-bottom: 10px;
+  }
+
+  .brand-main {
+    font-size: 20px;
+  }
+
+  .page {
+    padding: 18px 14px;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-title h1 {
+    font-size: 22px;
+  }
+
+  .filters {
+    flex-wrap: wrap;
+  }
+
+  .data-table {
+    min-width: 560px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stress-control {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar nav {
+    gap: 4px;
+  }
+
+  .sidebar nav a {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .page {
+    padding: 12px 8px;
+  }
+
+  .page-title h1 {
+    font-size: 18px;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .topbar strong {
+    font-size: 14px;
+  }
+
+  .data-table {
+    min-width: 480px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
 }
