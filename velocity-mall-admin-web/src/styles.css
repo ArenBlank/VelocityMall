@@ -597,6 +597,22 @@ label.field,
   box-shadow: 0 24px 72px rgba(22, 24, 31, 0.1);
 }
 
+@media (max-width: 640px) {
+  .login-card {
+    grid-template-columns: 1fr;
+  }
+
+  .login-brand-panel,
+  .login-form-panel {
+    padding: 28px;
+  }
+
+  .login-brand-panel h1 {
+    font-size: 28px;
+    margin: 24px 0 8px;
+  }
+}
+
 .login-brand-panel {
   padding: 48px;
   background: #14171d;
