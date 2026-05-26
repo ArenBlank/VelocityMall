@@ -3132,13 +3132,29 @@ img {
 
 .auth-entry-page {
   display: grid;
-  grid-template-columns: minmax(0, 1.42fr) minmax(0, 0.98fr);
+  grid-template-columns: minmax(540px, 1.42fr) minmax(420px, 0.98fr);
   min-height: calc(100vh - 102px);
   border: 1px solid #eceef2;
   border-radius: 10px;
   overflow: hidden;
   background: #fff;
   box-shadow: 0 18px 52px rgba(21, 24, 31, 0.08);
+}
+
+@media (max-width: 1100px) {
+  .auth-entry-page {
+    grid-template-columns: 1fr;
+  }
+  .campaign-visual {
+    display: none;
+  }
+  .auth-campaign {
+    min-height: auto;
+  }
+  .auth-panel-modern {
+    min-height: auto;
+    padding: 40px clamp(24px, 5vw, 70px);
+  }
 }
 
 @media (max-width: 960px) {
@@ -3182,10 +3198,10 @@ img {
   position: relative;
   z-index: 3;
   width: min(52%, 620px);
-  max-width: 100%;
+  max-width: calc(100% - 32px);
   min-width: 0;
-  flex-shrink: 0;
-  padding: 72px 0 0 58px;
+  padding: clamp(36px, 5vh, 72px) 0 0 clamp(24px, 5vw, 58px);
+  overflow-wrap: anywhere;
 }
 
 .campaign-badge {
@@ -3203,14 +3219,14 @@ img {
 .campaign-copy h1 {
   margin: 30px 0 12px;
   color: #fff;
-  font-size: clamp(44px, 4vw, 62px);
+  font-size: clamp(36px, 4vw, 62px);
   line-height: 1;
   letter-spacing: 0;
 }
 
 .campaign-copy > p {
   margin: 0;
-  font-size: 28px;
+  font-size: clamp(18px, 2vw, 28px);
   font-weight: 700;
 }
 
@@ -3364,10 +3380,11 @@ img {
 .campaign-visual {
   position: absolute;
   z-index: 2;
-  right: 70px;
+  right: clamp(12px, 6%, 70px);
   top: 92px;
   bottom: 88px;
-  width: min(40%, 470px);
+  width: min(38%, 470px);
+  min-width: 200px;
   padding: 12px;
   border: 2px solid #2d323a;
   border-radius: 24px;
@@ -3396,7 +3413,7 @@ img {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 54px 70px;
+  padding: 54px clamp(24px, 6vw, 70px);
   background:
     radial-gradient(circle at 70% 10%, rgba(240, 32, 37, 0.04), transparent 36%),
     #fff;
