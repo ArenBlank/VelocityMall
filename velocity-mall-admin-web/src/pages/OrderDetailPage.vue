@@ -8,7 +8,7 @@
       <RouterLink class="outline-button" to="/orders">返回订单中心</RouterLink>
     </div>
 
-    <div v-if="store.loading" class="panel"><div class="empty-state">订单详情加载中...</div></div>
+    <div v-if="store.loading" class="panel"><div class="empty-state">订单详情加载中…</div></div>
     <div v-else-if="order" class="detail-grid">
       <div class="panel">
         <div class="section-title">

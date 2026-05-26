@@ -1,6 +1,6 @@
 <template>
   <div class="safe-image" :class="className">
-    <img v-if="visibleSrc && !failed" :src="visibleSrc" :alt="alt" @error="failed = true" />
+    <img v-if="visibleSrc && !failed" :src="visibleSrc" :alt="alt" width="48" height="48" loading="lazy" @error="failed = true" />
     <span v-else>{{ label }}</span>
   </div>
 </template>

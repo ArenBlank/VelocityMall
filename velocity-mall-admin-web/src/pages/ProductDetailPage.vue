@@ -8,7 +8,7 @@
       <RouterLink class="outline-button" to="/products">返回商品列表</RouterLink>
     </div>
 
-    <div v-if="store.loading" class="panel"><div class="empty-state">商品详情加载中...</div></div>
+    <div v-if="store.loading" class="panel"><div class="empty-state">商品详情加载中…</div></div>
     <div v-else-if="spu" class="detail-grid" :class="{ 'single-column': !canWriteProducts }">
       <div class="panel">
         <div class="section-title">

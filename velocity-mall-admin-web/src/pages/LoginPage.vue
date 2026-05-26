@@ -42,11 +42,11 @@
         <form @submit.prevent="submit">
           <label class="field">
             用户名
-            <input v-model.trim="username" autocomplete="username" placeholder="请输入管理员用户名" />
+            <input v-model.trim="username" autocomplete="username" placeholder="请输入管理员用户名…" />
           </label>
           <label class="field">
             密码
-            <input v-model="password" autocomplete="current-password" placeholder="请输入密码" type="password" />
+            <input v-model="password" autocomplete="current-password" placeholder="请输入密码…" type="password" />
           </label>
           <button class="primary-button" type="submit" :disabled="auth.loading">
             <LoaderCircle v-if="auth.loading" :size="18" class="spin" />

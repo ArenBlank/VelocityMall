@@ -40,6 +40,16 @@ textarea {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+a:focus-visible,
+button:focus-visible {
+  border-radius: 4px;
 }
 
 button:disabled {
@@ -50,6 +60,20 @@ button:disabled {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .admin-shell {
@@ -231,11 +255,11 @@ label.field,
   resize: vertical;
 }
 
-.filters input:focus,
-.filters select:focus,
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
+.filters input:focus-visible,
+.filters select:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(250, 31, 45, 0.1);
 }
@@ -339,6 +363,7 @@ label.field,
   border-bottom: 1px solid #edf0f5;
   text-align: left;
   vertical-align: middle;
+  font-variant-numeric: tabular-nums;
 }
 
 .data-table th {
@@ -757,9 +782,11 @@ label.field,
   }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 }
 

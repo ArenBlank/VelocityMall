@@ -289,7 +289,7 @@ async function handleStressRun() {
   logs.value = [];
 
   addLog('========================================');
-  addLog('⚡ 启动 500×3=1,500 并发压测引擎...');
+  addLog('⚡ 启动 500×3=1,500 并发压测引擎…');
   addLog('   3 波 × 500 并发，对标 2,142 QPS 集群极限压测');
   addLog('   引擎同步执行，完成后返回结果');
   addLog('========================================');
@@ -309,7 +309,7 @@ async function handleStressRun() {
 
   // 2. 前端打几发可见采样展示在终端
   addLog('');
-  addLog(`   前端采样 ${VISIBLE_TEST_COUNT} 次...`);
+  addLog(`   前端采样 ${VISIBLE_TEST_COUNT} 次…`);
   let sampleOk = 0;
   let sampleFail = 0;
 
@@ -485,6 +485,7 @@ function delay(ms: number): Promise<void> {
   font-weight: 800;
   line-height: 1;
   letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-value small {
@@ -533,12 +534,17 @@ function delay(ms: number): Promise<void> {
   color: var(--success);
   font-size: 12px;
   font-weight: 500;
-  animation: blink 1.2s ease-in-out infinite;
 }
 
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+@media (prefers-reduced-motion: no-preference) {
+  .polling-indicator {
+    animation: blink 1.2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
 }
 
 .log-count {

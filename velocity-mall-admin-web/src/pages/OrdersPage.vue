@@ -100,11 +100,11 @@
       <form class="form-grid" @submit.prevent="submitDeliver">
         <label class="field">
           物流公司
-          <input v-model.trim="deliverForm.deliveryCompany" required placeholder="例如：顺丰速运" />
+          <input v-model.trim="deliverForm.deliveryCompany" required placeholder="例如：顺丰速运…" />
         </label>
         <label class="field">
           物流单号
-          <input v-model.trim="deliverForm.deliverySn" required placeholder="请输入真实物流单号" />
+          <input v-model.trim="deliverForm.deliverySn" required placeholder="请输入真实物流单号…" />
         </label>
         <div class="form-actions field full">
           <button class="primary-button" type="submit">确认发货</button>

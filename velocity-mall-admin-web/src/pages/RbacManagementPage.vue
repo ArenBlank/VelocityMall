@@ -175,7 +175,7 @@
               <input
                 v-model.trim="roleForm.roleCode"
                 :disabled="Boolean(editingRoleId)"
-                placeholder="例如 CONTENT_STAFF"
+                placeholder="例如 CONTENT_STAFF…"
                 required
               />
             </label>
