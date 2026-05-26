@@ -229,7 +229,7 @@ onMounted(() => load(null, 1));
       </div>
       <label class="order-search">
         <Search :size="19" />
-        <input v-model.trim="orderKeyword" placeholder="搜索订单号或商品名称" aria-label="搜索订单" />
+        <input v-model.trim="orderKeyword" placeholder="搜索订单号或商品名称…" aria-label="搜索订单" />
       </label>
     </section>
 
@@ -261,7 +261,7 @@ onMounted(() => load(null, 1));
 
       <div v-if="orderStore.loading" class="orders-loading">
         <ShoppingBag :size="26" />
-        正在加载订单...
+        正在加载订单…
       </div>
 
       <div v-else-if="orderStore.error" class="orders-error">
@@ -289,7 +289,7 @@ onMounted(() => load(null, 1));
 
           <div class="order-row-main">
             <div class="order-product-cell">
-              <img :src="productImage(order)" :alt="skuName(order)" @error="handleImageError" />
+              <img :src="productImage(order)" :alt="skuName(order)" loading="lazy" @error="handleImageError" />
               <div>
                 <RouterLink :to="`/products/${primaryItem(order)?.skuId || 0}`">{{ skuName(order) }}</RouterLink>
                 <span>{{ primaryItem(order)?.skuPrice !== undefined ? money(primaryItem(order)?.skuPrice) : '价格同步中' }}</span>
@@ -325,7 +325,7 @@ onMounted(() => load(null, 1));
 
           <div v-if="expandedOrder === order.orderSn" class="order-detail-drawer">
             <div v-for="item in order.items || []" :key="`${order.orderSn}-${item.skuId}`">
-              <img :src="normalizeImage(item.skuPic)" :alt="item.skuName" @error="handleImageError" />
+              <img :src="normalizeImage(item.skuPic)" :alt="item.skuName" loading="lazy" @error="handleImageError" />
               <span>{{ item.skuName }}</span>
               <b>{{ money(item.skuPrice) }}</b>
               <em>x {{ item.quantity }}</em>
@@ -352,7 +352,7 @@ onMounted(() => load(null, 1));
         </label>
         <label>
           评价内容
-          <textarea v-model.trim="reviewDraft.content" placeholder="说说这次购物体验" />
+          <textarea v-model.trim="reviewDraft.content" placeholder="说说这次购物体验…" />
         </label>
         <div class="form-actions">
           <button type="submit" class="primary-action" :disabled="reviewSubmitting">

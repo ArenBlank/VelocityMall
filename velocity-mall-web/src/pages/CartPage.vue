@@ -124,7 +124,7 @@ watch(
 
         <div v-if="cartStore.loading" class="inline-loading">
           <LoaderCircle :size="20" class="spin" />
-          正在加载购物车...
+          正在加载购物车…
         </div>
         <div v-else-if="cartStore.items.length === 0" class="empty-inline">
           购物车暂无商品，可以先进入秒杀详情页加入商品。
@@ -132,7 +132,7 @@ watch(
         <article v-for="item in cartStore.items" v-else :key="item.skuId" class="cart-item-row">
           <input type="checkbox" :checked="selectedSkuIds.has(item.skuId)" @change="toggleItem(item.skuId)" />
           <RouterLink :to="`/products/${item.skuId}`" class="cart-thumb">
-            <img :src="cartStore.imageFor(item.skuId)" :alt="item.skuName" />
+            <img :src="cartStore.imageFor(item.skuId)" :alt="item.skuName" loading="lazy" />
           </RouterLink>
           <div class="cart-info">
             <RouterLink :to="`/products/${item.skuId}`">{{ item.skuName }}</RouterLink>

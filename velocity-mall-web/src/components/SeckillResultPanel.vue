@@ -166,7 +166,7 @@ function handlePrimaryAction() {
 <template>
   <section class="result-panel" :class="`tone-${resultCopy.tone}`">
     <header class="result-product">
-      <img :src="resultImage" :alt="`${productName} ${skuName}`" />
+      <img :src="resultImage" :alt="`${productName} ${skuName}`" loading="lazy" />
       <div>
         <h2>{{ productName }}</h2>
         <p>{{ skuName }}</p>

@@ -276,7 +276,7 @@ onUnmounted(() => {
         >
           <ChevronLeft :size="24" />
         </button>
-        <img class="main-product-image" :src="currentImage" :alt="skuDisplayName" />
+        <img class="main-product-image" :src="currentImage" :alt="skuDisplayName" width="420" height="455" fetchpriority="high" />
         <button
           v-if="hasMultipleGalleryImages"
           class="gallery-arrow right"
@@ -295,7 +295,7 @@ onUnmounted(() => {
             type="button"
             @click="activeImageIndex = index"
           >
-            <img :src="thumb" alt="" />
+            <img :src="thumb" alt="" loading="lazy" />
           </button>
         </div>
       </aside>
@@ -357,6 +357,7 @@ onUnmounted(() => {
                 class="sku-record"
                 :class="{ active: sku.skuId === skuId }"
                 type="button"
+                :aria-label="`切换到 SKU ${sku.skuName}`"
                 @click="chooseSku(sku.skuId)"
               >
                 <strong>{{ sku.skuName }}</strong>

@@ -137,7 +137,7 @@ watch(
           用户名
           <span class="auth-input">
             <UserRound :size="22" />
-            <input v-model.trim="username" required placeholder="请输入用户名" autocomplete="username" />
+            <input v-model.trim="username" required placeholder="请输入用户名…" autocomplete="username" />
           </span>
         </label>
 
@@ -149,7 +149,7 @@ watch(
               v-model="password"
               required
               :type="showPassword ? 'text' : 'password'"
-              placeholder="请输入密码"
+              placeholder="请输入密码…"
               :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
             />
             <button type="button" aria-label="切换密码可见性" @click="showPassword = !showPassword">

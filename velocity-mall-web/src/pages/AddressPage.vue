@@ -91,11 +91,11 @@ onMounted(() => {
         <h2>{{ submitLabel }}</h2>
         <label>
           收货人
-          <input v-model.trim="form.receiverName" required placeholder="请输入收货人姓名" />
+          <input v-model.trim="form.receiverName" required placeholder="请输入收货人姓名…" />
         </label>
         <label>
           手机号
-          <input v-model.trim="form.receiverPhone" required placeholder="请输入手机号" />
+          <input v-model.trim="form.receiverPhone" type="tel" autocomplete="tel" inputmode="numeric" required placeholder="请输入手机号…" />
         </label>
         <div class="form-grid-3">
           <label>
@@ -113,7 +113,7 @@ onMounted(() => {
         </div>
         <label>
           详细地址
-          <textarea v-model.trim="form.detailAddress" required placeholder="街道、门牌号等详细信息" />
+          <textarea v-model.trim="form.detailAddress" required placeholder="街道、门牌号等详细信息…" />
         </label>
         <label class="checkbox-line">
           <input v-model="form.isDefault" type="checkbox" />
@@ -137,7 +137,7 @@ onMounted(() => {
         </header>
         <div v-if="addressStore.loading" class="inline-loading">
           <LoaderCircle :size="20" class="spin" />
-          正在加载地址...
+          正在加载地址…
         </div>
         <div v-else-if="addressStore.items.length === 0" class="empty-inline">暂无地址，请先新增一个收货地址。</div>
         <article v-for="address in addressStore.items" v-else :key="address.id" class="address-item">

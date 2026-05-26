@@ -210,7 +210,7 @@ watch(
 
     <div v-if="loading" class="inline-loading">
       <LoaderCircle :size="20" class="spin" />
-      正在加载评价...
+      正在加载评价…
     </div>
     <div v-else-if="error" class="form-message error">{{ error }}</div>
     <div v-else-if="reviews.length === 0" class="empty-inline">
@@ -262,7 +262,7 @@ watch(
         <section v-if="activeReplyReviewId === review.id" class="review-reply-panel">
           <div v-if="replyLoadingId === review.id" class="inline-loading compact">
             <LoaderCircle :size="16" class="spin" />
-            正在加载回复...
+            正在加载回复…
           </div>
           <div v-else-if="getReplyPage(review.id)?.records.length" class="review-reply-list">
             <article v-for="reply in getReplyPage(review.id)?.records" :key="reply.id" class="review-reply-item">
@@ -284,7 +284,7 @@ watch(
             <input
               v-model.trim="replyDrafts[review.id]"
               maxlength="500"
-              placeholder="写下你的回复"
+              placeholder="写下你的回复…"
               autocomplete="off"
             />
             <button type="submit" :disabled="replySubmittingId === review.id">

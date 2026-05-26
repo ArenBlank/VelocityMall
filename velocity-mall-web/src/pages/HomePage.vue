@@ -350,7 +350,7 @@ onUnmounted(() => {
       </div>
 
       <div class="hero-phone">
-        <img :key="featuredImage" :src="featuredImage" :alt="featuredTitle" />
+        <img :key="featuredImage" :src="featuredImage" :alt="featuredTitle" width="430" height="360" fetchpriority="high" />
       </div>
 
       <div v-if="heroItems.length > 1" class="hero-carousel-controls" aria-label="秒杀海报轮播">
@@ -386,7 +386,7 @@ onUnmounted(() => {
 
       <div v-if="seckillActivityStore.loading || productStore.loading" class="catalog-loading">
         <LoaderCircle :size="24" class="spin" />
-        正在加载秒杀活动...
+        正在加载秒杀活动…
       </div>
 
       <div v-else-if="seckillProducts.length > 0" class="product-grid seckill-product-grid">
@@ -396,7 +396,7 @@ onUnmounted(() => {
             <em>库存 {{ item.remainingStock ?? 0 }}</em>
           </div>
           <RouterLink class="card-image" :to="`/seckill/${item.skuId}`">
-            <img :src="item.displayImage" :alt="item.displayName" />
+            <img :src="item.displayImage" :alt="item.displayName" loading="lazy" />
           </RouterLink>
           <h2>{{ item.displayName }}</h2>
           <p>SKU {{ item.skuId }}</p>
@@ -450,7 +450,7 @@ onUnmounted(() => {
 
       <div v-if="productStore.loading || seckillActivityStore.loading" class="catalog-loading">
         <LoaderCircle :size="24" class="spin" />
-        正在加载商品...
+        正在加载商品…
       </div>
 
       <template v-else-if="products.length > 0">
@@ -461,7 +461,7 @@ onUnmounted(() => {
             <em v-if="item.saleCount > 0">已售 {{ item.saleCount.toLocaleString('zh-CN') }}</em>
           </div>
           <RouterLink class="card-image" :to="`/products/${item.skuId}`">
-            <img :src="item.displayImage" :alt="item.displayName" />
+            <img :src="item.displayImage" :alt="item.displayName" loading="lazy" />
           </RouterLink>
           <h2>{{ item.displayName }}</h2>
           <p>SKU {{ item.skuId }}</p>

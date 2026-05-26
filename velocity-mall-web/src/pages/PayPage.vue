@@ -87,7 +87,7 @@ watch(
 
         <div v-if="orderStore.loading && !order" class="payment-loading">
           <LoaderCircle :size="28" class="spin" />
-          正在同步订单信息...
+          正在同步订单信息…
         </div>
 
         <div v-else-if="!order" class="payment-empty">
@@ -99,7 +99,7 @@ watch(
 
         <template v-else>
           <div class="payment-product">
-            <img :src="productImage" :alt="productName" />
+            <img :src="productImage" :alt="productName" width="92" height="92" />
             <div>
               <strong>{{ productName }}</strong>
               <span>数量 x{{ quantity }}</span>

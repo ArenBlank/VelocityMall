@@ -67,7 +67,7 @@ onMounted(() => {
         </header>
         <div v-if="couponStore.loading" class="inline-loading">
           <LoaderCircle :size="20" class="spin" />
-          正在同步优惠券...
+          正在同步优惠券…
         </div>
         <div v-else-if="couponStore.availableCoupons.length === 0" class="empty-inline">
           当前暂无可领取优惠券。

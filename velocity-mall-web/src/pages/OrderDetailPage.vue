@@ -87,7 +87,7 @@ watch(() => props.orderSn, loadOrder);
 
     <section v-if="orderStore.loading && !order" class="inline-loading">
       <LoaderCircle :size="20" class="spin" />
-      正在同步订单详情...
+      正在同步订单详情…
     </section>
     <section v-else-if="!order" class="empty-inline">
       <AlertTriangle :size="22" />
@@ -101,7 +101,7 @@ watch(() => props.orderSn, loadOrder);
           <StatusBadge :status="order.status" />
         </header>
         <div v-for="item in items" :key="`${order.orderSn}-${item.skuId}`" class="order-detail-product">
-          <img :src="imageFor(item.skuPic, item.skuId)" :alt="item.skuName" />
+          <img :src="imageFor(item.skuPic, item.skuId)" :alt="item.skuName" loading="lazy" />
           <div>
             <RouterLink :to="`/products/${item.skuId}`">{{ item.skuName }}</RouterLink>
             <span>SKU {{ item.skuId }} · x {{ item.quantity }}</span>

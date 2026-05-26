@@ -129,7 +129,7 @@ watch([keyword, sort, pageNo], loadProducts);
 
       <div v-if="productStore.loading" class="catalog-loading">
         <LoaderCircle :size="24" class="spin" />
-        正在加载商品...
+        正在加载商品…
       </div>
 
       <template v-else-if="products.length > 0">
@@ -140,7 +140,7 @@ watch([keyword, sort, pageNo], loadProducts);
               <em v-if="item.saleCount > 0">已售 {{ item.saleCount.toLocaleString('zh-CN') }}</em>
             </div>
             <RouterLink class="card-image" :to="`/products/${item.skuId}`">
-              <img :src="item.displayImage" :alt="item.displayName" />
+              <img :src="item.displayImage" :alt="item.displayName" loading="lazy" />
             </RouterLink>
             <h2>{{ item.displayName }}</h2>
             <p>SKU {{ item.skuId }}</p>

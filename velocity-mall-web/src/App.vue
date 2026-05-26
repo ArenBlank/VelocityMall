@@ -82,7 +82,7 @@ watch(() => authStore.token, ensureBuyerDataLoaded);
       </div>
 
       <form class="search-box" role="search" @submit.prevent="submitSearch">
-        <input v-model.trim="searchKeyword" placeholder="搜索商品名称或 SKU" aria-label="搜索商品" />
+        <input v-model.trim="searchKeyword" placeholder="搜索商品名称或 SKU…" aria-label="搜索商品" autocomplete="off" />
         <button type="submit">
           <Search :size="21" />
           搜索

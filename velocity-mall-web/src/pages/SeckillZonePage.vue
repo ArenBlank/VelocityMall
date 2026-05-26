@@ -170,7 +170,7 @@ onUnmounted(() => {
 
       <div v-if="loading" class="catalog-loading">
         <LoaderCircle :size="24" class="spin" />
-        正在加载秒杀活动...
+        正在加载秒杀活动…
       </div>
 
       <div v-else-if="seckillItems.length > 0" class="product-grid seckill-product-grid">
@@ -180,7 +180,7 @@ onUnmounted(() => {
             <em>库存 {{ item.remainingStock }}</em>
           </div>
           <RouterLink class="card-image" :to="`/seckill/${item.skuId}`">
-            <img :src="item.displayImage" :alt="item.displayName" />
+            <img :src="item.displayImage" :alt="item.displayName" loading="lazy" />
           </RouterLink>
           <h2>{{ item.displayName }}</h2>
           <p>SKU {{ item.skuId }}</p>

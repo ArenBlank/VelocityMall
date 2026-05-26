@@ -833,6 +833,7 @@
   width: min(640px, 100%);
   margin: 22px 0;
   padding: 0;
+  overscroll-behavior: contain;
 }
 
 .order-actions {
@@ -864,11 +865,35 @@ input {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+a:focus-visible,
+button:focus-visible {
+  border-radius: 4px;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
 }
 
 img {
@@ -1455,6 +1480,7 @@ img {
   border-radius: 6px;
   background: var(--accent);
   box-shadow: 0 10px 20px rgba(240, 32, 37, 0.22);
+  font-variant-numeric: tabular-nums;
 }
 
 .hero-actions {
@@ -1557,25 +1583,27 @@ img {
   background: var(--accent);
 }
 
-@keyframes hero-copy-in {
-  from {
-    opacity: 0;
-    transform: translateX(-16px);
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes hero-copy-in {
+    from {
+      opacity: 0;
+      transform: translateX(-16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
 
-@keyframes hero-media-in {
-  from {
-    opacity: 0;
-    transform: translateX(18px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
+  @keyframes hero-media-in {
+    from {
+      opacity: 0;
+      transform: translateX(18px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
   }
 }
 
@@ -1814,6 +1842,7 @@ img {
 
 .seckill-countdown-line strong {
   color: #111827;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-button {
@@ -1898,6 +1927,7 @@ img {
   border-radius: 7px;
   background: var(--accent);
   font-size: 22px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ribbon-fact {
@@ -3648,6 +3678,10 @@ body:has(.auth-shell) {
   padding: 0 14px;
   outline: 0;
 }
+.auth-box input:focus-visible {
+  border-color: #ff2734;
+  box-shadow: 0 0 0 3px rgb(255 39 52 / 12%);
+}
 
 .ghost-button,
 .pay-link {
@@ -3701,6 +3735,11 @@ body:has(.auth-shell) {
   border-radius: 7px;
   background: #fff;
   color: #969ca6;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.order-search:focus-within {
+  border-color: #ff2734;
+  box-shadow: 0 0 0 3px rgb(255 39 52 / 12%);
 }
 
 .order-search input {
@@ -4356,20 +4395,22 @@ body:has(.auth-shell) {
   line-height: 1.7;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
-}
 
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 
