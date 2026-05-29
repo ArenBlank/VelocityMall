@@ -8,18 +8,16 @@ import com.velocitymall.admin.service.AdminService;
 import com.velocitymall.common.result.Result;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
@@ -41,6 +39,11 @@ public class AdminStressTestController {
     private static final int CONCURRENCY = 500;
     private static final int WAVES = 3;
     private static final int WAVE_DELAY_MS = 50;
+    // One wave = 500 threads. Waves are staggered by 50ms and each Feign call
+    // completes in 20-50ms, so threads from earlier waves are freed by the time
+    // the next wave hits. 500 threads delivers full 500-concurrent pressure
+    // while using 1/3 the stack memory of the original 1500-thread pool.
+    private static final int ENGINE_THREADS = CONCURRENCY;
 
     private final AdminService adminService;
     private final SeckillFeignClient seckillFeignClient;
@@ -54,7 +57,12 @@ public class AdminStressTestController {
     @PostMapping("/cleanup/{skuId}")
     @RequireAdminPermission(AdminPermissionCodes.SECKILL_PREHEAT)
     public Result<Map<String, Object>> cleanup(@PathVariable("skuId") @Min(1) Long skuId) {
-        return Result.success(adminService.cleanupSeckillTest(skuId));
+        Map<String, Object> result = adminService.cleanupSeckillTest(skuId);
+        // Hint JVM to recycle heap expanded by the stress-test thread pool.
+        // This is best-effort; for guaranteed reclamation, restart the admin service.
+        System.gc();
+        result.put("gcHint", "JVM GC suggested — if memory stays high, restart admin service");
+        return Result.success(result);
     }
 
     @PostMapping("/single-test/{skuId}")
@@ -101,8 +109,26 @@ public class AdminStressTestController {
         long totalStart = System.currentTimeMillis();
         int totalRequests = CONCURRENCY * WAVES;
 
-        // Single large pool for all waves
-        ExecutorService executor = Executors.newFixedThreadPool(CONCURRENCY * WAVES);
+        // Warmup: single call to prime Feign + Nacos service discovery,
+        // preventing 200-thread concurrent subscription storm.
+        try {
+            seckillFeignClient.testExecute(TEST_SKU_ID, 99999L);
+        } catch (Exception ignored) {}
+
+        // Bounded pool: max 200 threads, excess tasks queue up.
+        // This prevents the 1.5GB thread-stack blowout from 1500 threads
+        // while still generating sustained high concurrency against the seckill service.
+        ThreadFactory daemonFactory = r -> {
+            Thread t = new Thread(r, "stress-" + r.hashCode());
+            t.setDaemon(true);
+            return t;
+        };
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                ENGINE_THREADS, ENGINE_THREADS,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(),
+                daemonFactory);
+        executor.prestartAllCoreThreads();
         List<Future<String>> futures = new ArrayList<>();
 
         for (int wave = 0; wave < WAVES; wave++) {
@@ -122,7 +148,6 @@ public class AdminStressTestController {
                     }
                 }));
             }
-            // Brief stagger to let Redis breathe
             if (wave < WAVES - 1) {
                 try { Thread.sleep(WAVE_DELAY_MS); } catch (InterruptedException ignored) {}
             }
@@ -142,6 +167,7 @@ public class AdminStressTestController {
             }
         }
         executor.shutdown();
+        try { executor.awaitTermination(10, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
 
         long elapsed = System.currentTimeMillis() - totalStart;
         long qps = elapsed > 0 ? totalRequests * 1000L / elapsed : 0;

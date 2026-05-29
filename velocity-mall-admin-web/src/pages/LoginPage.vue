@@ -54,7 +54,7 @@
           </button>
         </form>
         <div class="message" :class="{ error: Boolean(message) }">
-          {{ message || '本地开发默认管理员账号：admin / 123456' }}
+          {{ message || '请输入管理员账号和密码' }}
         </div>
       </div>
     </section>
@@ -70,8 +70,8 @@ import { useAdminAuthStore } from '@/stores/adminAuthStore';
 const auth = useAdminAuthStore();
 const router = useRouter();
 const route = useRoute();
-const username = ref('admin');
-const password = ref('123456');
+const username = ref('');
+const password = ref('');
 const localError = ref('');
 const message = computed(() => localError.value || auth.error);
 
