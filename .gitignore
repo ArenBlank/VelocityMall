@@ -7,3 +7,16 @@ dist/
 output/
 upload-assets/
 docker/data/
+
+# Claude Code local config
+.claude/
+CLAUDE.md
+
+# Project docs (internal)
+CURRENT_IMPLEMENTATION_STATUS.md
+DEVELOPMENT_SPEC.md
+
+# Environment
+.env
+.env.local
+.env.*.local

@@ -1,5 +1,7 @@
 ﻿VelocityMall 一键启动命令
 
+管理端账密admin 123456
+
 说明：
 - 本项目本地开发采用“混合部署”。
 - MySQL、Redis、Nacos、MinIO、RocketMQ、Elasticsearch、Kibana、Nginx 使用 Docker 启动。
@@ -144,3 +146,4 @@ Write-Host "正在关闭 Docker 中间件..."
 docker compose -f docker/docker-compose.yml stop
 
 Write-Host "所有服务已关闭"
+
