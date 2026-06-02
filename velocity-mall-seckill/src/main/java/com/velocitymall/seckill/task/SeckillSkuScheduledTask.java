@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SeckillSkuScheduledTask {
 
-    public static final String SECKILL_STOCK_PREFIX = "velocitymall:seckill:stock:";
+    public static String stockKey(Object skuId) { return "velocitymall:seckill:{" + skuId + "}:stock"; }
 
     private final StringRedisTemplate stringRedisTemplate;
 
@@ -35,7 +35,7 @@ public class SeckillSkuScheduledTask {
         }
 
         for (SeckillActivity activity : activities) {
-            String stockKey = SECKILL_STOCK_PREFIX + activity.getSkuId();
+            String stockKey = stockKey(activity.getSkuId());
             Boolean initialized = stringRedisTemplate.opsForValue()
                     .setIfAbsent(stockKey, String.valueOf(activity.getSeckillStock()));
             if (Boolean.TRUE.equals(initialized)) {

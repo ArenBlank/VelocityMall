@@ -32,7 +32,7 @@ public class SeckillActivityServiceImpl implements SeckillActivityService {
 
     private static final String STATE_DISABLED = "DISABLED";
 
-    private static final String STOCK_KEY_PREFIX = "velocitymall:seckill:stock:";
+    private static String stockKey(Object skuId) { return "velocitymall:seckill:{" + skuId + "}:stock"; }
 
     private static final DateTimeFormatter ISO_DATE_TIME = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
@@ -119,7 +119,7 @@ public class SeckillActivityServiceImpl implements SeckillActivityService {
     }
 
     private Integer resolveRemainingStock(SeckillActivity activity) {
-        String stockValue = stringRedisTemplate.opsForValue().get(STOCK_KEY_PREFIX + activity.getSkuId());
+        String stockValue = stringRedisTemplate.opsForValue().get(stockKey(activity.getSkuId()));
         if (!StringUtils.hasText(stockValue)) {
             return activity.getSeckillStock();
         }

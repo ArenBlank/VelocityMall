@@ -82,8 +82,8 @@ public class AdminServiceImpl implements AdminService {
     private static final int STATUS_DISABLED = 0;
     private static final String PRODUCT_SPU_CACHE_PREFIX = "velocitymall:product:spu:";
     private static final String PRODUCT_SKU_CACHE_PREFIX = "velocitymall:product:sku:";
-    private static final String SECKILL_STOCK_PREFIX = "velocitymall:seckill:stock:";
-    private static final String SECKILL_BOUGHT_PREFIX = "velocitymall:seckill:bought:";
+    private static String seckillStockKey(Object skuId) { return "velocitymall:seckill:{" + skuId + "}:stock"; }
+    private static String seckillBoughtKey(Object skuId) { return "velocitymall:seckill:{" + skuId + "}:bought"; }
 
     private final AdminMapper adminMapper;
     private final AdminSpuMapper adminSpuMapper;
@@ -408,9 +408,9 @@ public class AdminServiceImpl implements AdminService {
         if (activity.getStatus() == null || activity.getStatus() != STATUS_ENABLED) {
             throw new BusinessException(ResultCode.BIZ_WARNING, "活动未启用，不能预热");
         }
-        stringRedisTemplate.opsForValue().set(SECKILL_STOCK_PREFIX + activity.getSkuId(),
+        stringRedisTemplate.opsForValue().set(seckillStockKey(activity.getSkuId()),
                 String.valueOf(activity.getSeckillStock()));
-        stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + activity.getSkuId());
+        stringRedisTemplate.delete(seckillBoughtKey(activity.getSkuId()));
         return toSeckillActivityVO(activity);
     }
 
@@ -444,11 +444,11 @@ public class AdminServiceImpl implements AdminService {
         activity.setSeckillStock(stock);
         adminSeckillActivityMapper.updateById(activity);
 
-        stringRedisTemplate.opsForValue().set(SECKILL_STOCK_PREFIX + skuId, String.valueOf(stock));
-        stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+        stringRedisTemplate.opsForValue().set(seckillStockKey(skuId), String.valueOf(stock));
+        stringRedisTemplate.delete(seckillBoughtKey(skuId));
         resetStressMetricsKeys(skuId);
 
-        String redisStock = stringRedisTemplate.opsForValue().get(SECKILL_STOCK_PREFIX + skuId);
+        String redisStock = stringRedisTemplate.opsForValue().get(seckillStockKey(skuId));
 
         Map<String, Object> result = new HashMap<>();
         result.put("skuId", skuId);
@@ -463,8 +463,8 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public Map<String, Object> cleanupSeckillTest(Long skuId) {
-        stringRedisTemplate.delete(SECKILL_STOCK_PREFIX + skuId);
-        stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+        stringRedisTemplate.delete(seckillStockKey(skuId));
+        stringRedisTemplate.delete(seckillBoughtKey(skuId));
         resetStressMetricsKeys(skuId);
 
         List<AdminOrderItem> items = adminOrderItemMapper.selectList(
@@ -698,16 +698,16 @@ public class AdminServiceImpl implements AdminService {
 
     private void clearSeckillRedis(Long skuId) {
         if (skuId != null) {
-            stringRedisTemplate.delete(SECKILL_STOCK_PREFIX + skuId);
-            stringRedisTemplate.delete(SECKILL_BOUGHT_PREFIX + skuId);
+            stringRedisTemplate.delete(seckillStockKey(skuId));
+            stringRedisTemplate.delete(seckillBoughtKey(skuId));
         }
     }
 
     private void resetStressMetricsKeys(Long skuId) {
         try {
-            stringRedisTemplate.delete("velocitymall:seckill:qps:" + skuId);
-            stringRedisTemplate.delete("velocitymall:seckill:latency:" + skuId);
-            stringRedisTemplate.delete("velocitymall:seckill:mq-sent:" + skuId);
+            stringRedisTemplate.delete("velocitymall:seckill:{" + skuId + "}:qps");
+            stringRedisTemplate.delete("velocitymall:seckill:{" + skuId + "}:latency");
+            stringRedisTemplate.delete("velocitymall:seckill:{" + skuId + "}:mq-sent");
         } catch (Exception ignored) {
         }
     }
@@ -808,7 +808,7 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private Integer resolveRemainingStock(AdminSeckillActivity activity) {
-        String stock = stringRedisTemplate.opsForValue().get(SECKILL_STOCK_PREFIX + activity.getSkuId());
+        String stock = stringRedisTemplate.opsForValue().get(seckillStockKey(activity.getSkuId()));
         if (StringUtils.hasText(stock)) {
             try {
                 return Integer.valueOf(stock);

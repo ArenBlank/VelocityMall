@@ -31,15 +31,27 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SeckillServiceImpl implements SeckillService {
 
-    private static final String STOCK_KEY_PREFIX = "velocitymall:seckill:stock:";
+    private static final String SECKILL_HASH_TAG_PREFIX = "velocitymall:seckill:{";
 
-    private static final String BOUGHT_KEY_PREFIX = "velocitymall:seckill:bought:";
+    private static final String STOCK_KEY_INFIX = "}:stock";
 
-    private static final String QPS_KEY = "velocitymall:seckill:qps:";
+    private static final String BOUGHT_KEY_INFIX = "}:bought";
 
-    private static final String LATENCY_KEY = "velocitymall:seckill:latency:";
+    private static final String QPS_KEY_INFIX = "}:qps";
 
-    private static final String MQ_SENT_KEY = "velocitymall:seckill:mq-sent:";
+    private static final String LATENCY_KEY_INFIX = "}:latency";
+
+    private static final String MQ_SENT_KEY_INFIX = "}:mq-sent";
+
+    private static String stockKey(Object skuId) { return SECKILL_HASH_TAG_PREFIX + skuId + STOCK_KEY_INFIX; }
+
+    private static String boughtKey(Object skuId) { return SECKILL_HASH_TAG_PREFIX + skuId + BOUGHT_KEY_INFIX; }
+
+    private static String qpsKey(Object skuId) { return SECKILL_HASH_TAG_PREFIX + skuId + QPS_KEY_INFIX; }
+
+    private static String latencyKey(Object skuId) { return SECKILL_HASH_TAG_PREFIX + skuId + LATENCY_KEY_INFIX; }
+
+    private static String mqSentKey(Object skuId) { return SECKILL_HASH_TAG_PREFIX + skuId + MQ_SENT_KEY_INFIX; }
 
     private static final int LATENCY_SAMPLE_SIZE = 100;
 
@@ -120,8 +132,8 @@ public class SeckillServiceImpl implements SeckillService {
         trackQps(skuId);
 
         SeckillActivity activity = seckillActivityService.requireActiveActivity(skuId);
-        String stockKey = STOCK_KEY_PREFIX + skuId;
-        String boughtKey = BOUGHT_KEY_PREFIX + skuId;
+        String stockKey = stockKey(skuId);
+        String boughtKey = boughtKey(skuId);
         String userIdValue = String.valueOf(userId);
         String quantityValue = String.valueOf(DEFAULT_QUANTITY);
 
@@ -169,8 +181,8 @@ public class SeckillServiceImpl implements SeckillService {
             throw new BusinessException(ResultCode.PARAM_ERROR, "用户 ID 非法");
         }
 
-        String stockKey = STOCK_KEY_PREFIX + skuId;
-        String boughtKey = BOUGHT_KEY_PREFIX + skuId;
+        String stockKey = stockKey(skuId);
+        String boughtKey = boughtKey(skuId);
         Long result = stringRedisTemplate.execute(
                 ROLLBACK_SCRIPT,
                 List.of(stockKey, boughtKey),
@@ -228,7 +240,7 @@ public class SeckillServiceImpl implements SeckillService {
 
     private void trackQps(Long skuId) {
         try {
-            String key = QPS_KEY + skuId;
+            String key = qpsKey(skuId);
             stringRedisTemplate.opsForValue().increment(key);
             stringRedisTemplate.expire(key, java.time.Duration.ofSeconds(5));
         } catch (Exception ignored) {
@@ -238,7 +250,7 @@ public class SeckillServiceImpl implements SeckillService {
     private void trackLatency(Long skuId, long startMs) {
         try {
             long elapsed = System.currentTimeMillis() - startMs;
-            String key = LATENCY_KEY + skuId;
+            String key = latencyKey(skuId);
             stringRedisTemplate.opsForList().leftPush(key, String.valueOf(elapsed));
             stringRedisTemplate.opsForList().trim(key, 0, LATENCY_SAMPLE_SIZE - 1);
         } catch (Exception ignored) {
@@ -247,7 +259,7 @@ public class SeckillServiceImpl implements SeckillService {
 
     private void trackMqSent(Long skuId) {
         try {
-            stringRedisTemplate.opsForValue().increment(MQ_SENT_KEY + skuId);
+            stringRedisTemplate.opsForValue().increment(mqSentKey(skuId));
         } catch (Exception ignored) {
         }
     }
@@ -256,14 +268,14 @@ public class SeckillServiceImpl implements SeckillService {
     public Map<String, Object> getStressMetrics(Long skuId) {
         Map<String, Object> metrics = new HashMap<>();
 
-        String stockStr = stringRedisTemplate.opsForValue().get(STOCK_KEY_PREFIX + skuId);
+        String stockStr = stringRedisTemplate.opsForValue().get(stockKey(skuId));
         metrics.put("stock", stockStr != null ? Integer.parseInt(stockStr) : 0);
 
-        String qpsStr = stringRedisTemplate.opsForValue().get(QPS_KEY + skuId);
+        String qpsStr = stringRedisTemplate.opsForValue().get(qpsKey(skuId));
         metrics.put("qps", qpsStr != null ? Integer.parseInt(qpsStr) : 0);
 
         List<String> latencies = stringRedisTemplate.opsForList()
-                .range(LATENCY_KEY + skuId, 0, -1);
+                .range(latencyKey(skuId), 0, -1);
         if (latencies != null && !latencies.isEmpty()) {
             List<Long> sorted = latencies.stream()
                     .map(Long::parseLong)
@@ -275,7 +287,7 @@ public class SeckillServiceImpl implements SeckillService {
             metrics.put("latency", 0);
         }
 
-        String mqSentStr = stringRedisTemplate.opsForValue().get(MQ_SENT_KEY + skuId);
+        String mqSentStr = stringRedisTemplate.opsForValue().get(mqSentKey(skuId));
         metrics.put("mqQueue", mqSentStr != null ? Integer.parseInt(mqSentStr) : 0);
 
         return metrics;
@@ -284,9 +296,9 @@ public class SeckillServiceImpl implements SeckillService {
     @Override
     public void resetStressMetrics(Long skuId) {
         try {
-            stringRedisTemplate.delete(QPS_KEY + skuId);
-            stringRedisTemplate.delete(LATENCY_KEY + skuId);
-            stringRedisTemplate.delete(MQ_SENT_KEY + skuId);
+            stringRedisTemplate.delete(qpsKey(skuId));
+            stringRedisTemplate.delete(latencyKey(skuId));
+            stringRedisTemplate.delete(mqSentKey(skuId));
         } catch (Exception ignored) {
         }
     }

@@ -53,3 +53,19 @@ rocketmq:
 payment:
   mock:
     secret: ${PAYMENT_MOCK_SECRET:velocity-mall-mock-payment-secret}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: cluster
+  data:
+    redis:
+      cluster:
+        nodes:
+          - 127.0.0.1:7001
+          - 127.0.0.1:7002
+          - 127.0.0.1:7003
+          - 127.0.0.1:7004
+          - 127.0.0.1:7005
+          - 127.0.0.1:7006
